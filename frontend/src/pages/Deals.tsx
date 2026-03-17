@@ -18,8 +18,12 @@ const STATUS_OPTIONS: StatusOption[] = [
 ];
 
 export const Deals: React.FC = () => {
-  const { currentCompany } = useTenant();
+  const { currentCompany, companyRole } = useTenant();
   const { user } = useAuth();
+
+  const canAddDeal =
+    (companyRole === 'company_admin' || companyRole === 'manager') ||
+    (user?.role === 'platform_admin' || user?.role === 'system_admin');
 
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
@@ -215,8 +219,8 @@ export const Deals: React.FC = () => {
             Atualizar
           </button>
 
-          {/* New Deal */}
-          {stages.length > 0 && pipelineId && (
+          {/* New Deal — admin/gerente ou platform/system admin */}
+          {stages.length > 0 && pipelineId && canAddDeal && (
             <button
               onClick={() => setShowNewDeal(true)}
               className="flex items-center gap-2 px-4 py-2 text-[11px] font-mono uppercase tracking-widest bg-white text-black rounded-lg hover:bg-stone-200 transition-all font-semibold"

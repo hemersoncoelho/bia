@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   Search, X, RefreshCw, Users, Plus, Phone, Mail,
   MessageSquare, Instagram, ChevronRight, AlertCircle,
   Calendar, Hash,
 } from 'lucide-react';
 import { useTenant } from '../contexts/TenantContext';
+import { useDebounce } from '../hooks/useDebounce';
 import { supabase } from '../lib/supabase';
 import { cn } from '../lib/utils';
 
@@ -14,9 +15,11 @@ type LifecycleStage = 'lead' | 'qualified' | 'opportunity' | 'customer' | 'lost'
 
 interface ContactIdentity {
   id: string;
-  channel_type: string;
-  display_value: string;
-  is_primary: boolean;
+  provider: string;
+  identifier: string;
+  channel_type?: string;
+  display_value?: string;
+  is_primary?: boolean;
 }
 
 interface Contact {
@@ -147,21 +150,22 @@ const ContactDetailPanel: React.FC<ContactDetailPanelProps> = ({ contact, onClos
             <div className="p-5">
               <p className="text-[10px] font-mono uppercase tracking-widest text-stone-600 mb-3">Canais</p>
               <div className="space-y-2">
-                {contact.contact_identities.map(id => (
-                  <div key={id.id} className="flex items-center gap-3">
-                    <span className={cn(
-                      'flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium shrink-0',
-                      CHANNEL_COLOR[id.channel_type] ?? 'text-stone-400 bg-stone-400/10'
-                    )}>
-                      {CHANNEL_ICON[id.channel_type] ?? <Hash size={12} />}
-                      {id.channel_type}
-                    </span>
-                    <span className="text-sm text-stone-300 font-mono truncate">{id.display_value}</span>
-                    {id.is_primary && (
-                      <span className="ml-auto text-[10px] text-stone-600 font-mono uppercase shrink-0">principal</span>
-                    )}
-                  </div>
-                ))}
+                {contact.contact_identities.map(id => {
+                  const ch = id.channel_type ?? id.provider;
+                  const val = id.display_value ?? id.identifier;
+                  return (
+                    <div key={id.id} className="flex items-center gap-3">
+                      <span className={cn(
+                        'flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium shrink-0',
+                        CHANNEL_COLOR[ch] ?? 'text-stone-400 bg-stone-400/10'
+                      )}>
+                        {CHANNEL_ICON[ch] ?? <Hash size={12} />}
+                        {ch}
+                      </span>
+                      <span className="text-sm text-stone-300 font-mono truncate">{val}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -258,19 +262,19 @@ const NewContactModal: React.FC<NewContactModalProps> = ({ companyId, onClose, o
     try {
       const { data: contact, error: contactErr } = await supabase
         .from('contacts')
-        .insert({ company_id: companyId, full_name: fullName.trim(), lifecycle_stage: stage, status: 'active' })
+        .insert({ company_id: companyId, full_name: fullName.trim(), status: stage === 'lead' ? 'lead' : stage === 'lost' ? 'inactive' : 'active' })
         .select('id')
         .single();
 
       if (contactErr) throw contactErr;
 
       if (identifier.trim()) {
+        const value = identifier.trim();
         await supabase.from('contact_identities').insert({
-          company_id: companyId,
           contact_id: contact.id,
           channel_type: channel,
-          display_value: identifier.trim(),
-          normalized_value: identifier.trim().toLowerCase(),
+          normalized_value: value,
+          display_value: value,
           is_primary: true,
         });
       }
@@ -374,6 +378,7 @@ const ContactRow: React.FC<ContactRowProps> = ({ contact, onSelect }) => {
   const badge   = LIFECYCLE_BADGE[stage] ?? LIFECYCLE_BADGE.lead;
   const dot     = LIFECYCLE_DOT[stage]  ?? LIFECYCLE_DOT.lead;
   const primary = contact.contact_identities.find(i => i.is_primary) ?? contact.contact_identities[0];
+  const displayVal = primary?.display_value ?? primary?.identifier;
 
   return (
     <button
@@ -388,8 +393,8 @@ const ContactRow: React.FC<ContactRowProps> = ({ contact, onSelect }) => {
       {/* Name + identifier */}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-white truncate">{contact.full_name || 'Sem nome'}</p>
-        {primary && (
-          <p className="text-[11px] text-stone-500 truncate mt-0.5 font-mono">{primary.display_value}</p>
+        {displayVal && (
+          <p className="text-[11px] text-stone-500 truncate mt-0.5 font-mono">{displayVal}</p>
         )}
       </div>
 
@@ -404,14 +409,17 @@ const ContactRow: React.FC<ContactRowProps> = ({ contact, onSelect }) => {
 
       {/* Channels */}
       <div className="hidden md:flex items-center gap-1 shrink-0">
-        {contact.contact_identities.slice(0, 3).map(id => (
-          <span key={id.id} className={cn(
-            'flex items-center px-1.5 py-1 rounded text-[10px]',
-            CHANNEL_COLOR[id.channel_type] ?? 'text-stone-400 bg-stone-400/10'
-          )}>
-            {CHANNEL_ICON[id.channel_type] ?? <Hash size={10} />}
-          </span>
-        ))}
+        {contact.contact_identities.slice(0, 3).map(id => {
+          const ch = id.channel_type ?? id.provider;
+          return (
+            <span key={id.id} className={cn(
+              'flex items-center px-1.5 py-1 rounded text-[10px]',
+              CHANNEL_COLOR[ch] ?? 'text-stone-400 bg-stone-400/10'
+            )}>
+              {CHANNEL_ICON[ch] ?? <Hash size={10} />}
+            </span>
+          );
+        })}
       </div>
 
       {/* Last interaction */}
@@ -435,6 +443,7 @@ export const Contacts: React.FC = () => {
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState<string | null>(null);
   const [searchQuery, setSearchQuery]   = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 280);
   const [stageFilter, setStageFilter]   = useState<LifecycleStage | 'all'>('all');
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
@@ -449,15 +458,27 @@ export const Contacts: React.FC = () => {
       const { data, error: err } = await supabase
         .from('contacts')
         .select(`
-          id, company_id, full_name, lifecycle_stage, status,
+          id, company_id, full_name, status,
           source, notes, last_interaction_at, created_at, updated_at,
-          contact_identities (id, channel_type, display_value, is_primary)
+          contact_identities (id, channel_type, normalized_value, display_value, is_primary)
         `)
         .eq('company_id', currentCompany.id)
         .order('created_at', { ascending: false });
 
       if (err) throw err;
-      setContacts((data as Contact[]) ?? []);
+      const mapped = (data ?? []).map((c: any) => ({
+        ...c,
+        lifecycle_stage: (c.lifecycle_stage ?? (c.status === 'lead' ? 'lead' : c.status === 'active' ? 'qualified' : c.status === 'inactive' ? 'lost' : 'lead')) as LifecycleStage,
+        contact_identities: (c.contact_identities ?? []).map((ci: any) => ({
+          id: ci.id,
+          provider: ci.provider ?? ci.channel_type ?? 'unknown',
+          identifier: ci.identifier ?? ci.normalized_value ?? ci.display_value ?? '',
+          channel_type: ci.channel_type ?? ci.provider,
+          display_value: ci.display_value ?? ci.normalized_value ?? ci.identifier,
+          is_primary: ci.is_primary ?? true,
+        })),
+      }));
+      setContacts(mapped as Contact[]);
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar contatos.');
     } finally {
@@ -479,17 +500,20 @@ export const Contacts: React.FC = () => {
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
-  const filtered = contacts.filter(c => {
-    const matchStage = stageFilter === 'all' || c.lifecycle_stage === stageFilter;
-    if (!matchStage) return false;
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    const nameMatch = c.full_name?.toLowerCase().includes(q);
-    const identityMatch = c.contact_identities.some(id => id.display_value?.toLowerCase().includes(q));
-    return nameMatch || identityMatch;
-  });
+  const filtered = useMemo(() => {
+    return contacts.filter(c => {
+      const matchStage = stageFilter === 'all' || c.lifecycle_stage === stageFilter;
+      if (!matchStage) return false;
+      if (!debouncedSearch) return true;
+      const q = debouncedSearch.toLowerCase();
+      const nameMatch = c.full_name?.toLowerCase().includes(q);
+      const identityMatch = c.contact_identities.some(id => (id.display_value ?? id.identifier)?.toLowerCase().includes(q));
+      return nameMatch || identityMatch;
+    });
+  }, [contacts, stageFilter, debouncedSearch]);
 
-  const stageCount = (stage: LifecycleStage) => contacts.filter(c => c.lifecycle_stage === stage).length;
+  const stageCount = useCallback((stage: LifecycleStage) =>
+    contacts.filter(c => c.lifecycle_stage === stage).length, [contacts]);
 
   if (!currentCompany) {
     return (

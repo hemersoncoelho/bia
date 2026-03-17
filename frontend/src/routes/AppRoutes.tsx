@@ -1,23 +1,36 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute, PublicRoute } from './Guards';
+import { AgentRestrictedRoute, IndexRedirect } from '../components/RouteGuardForAgent';
 import { AppShell } from '../components/Layout/AppShell';
 
-// Operational Pages
+// Critical path — carregados imediatamente
 import { Login } from '../pages/Login';
 import { SelectCompany } from '../pages/SelectCompany';
-import { Inbox as InboxPage } from '../pages/Inbox';
-import { Deals } from '../pages/Deals';
-import { Tasks } from '../pages/Tasks';
-import { AiAgents } from '../pages/AiAgents';
-import { AiAgentDetail } from '../pages/AiAgentDetail';
-import { Contacts } from '../pages/Contacts';
-import { CompanySettings } from '../pages/CompanySettings';
-import { Dashboard } from '../pages/Dashboard'; // Tela analítica com KPIs e gráficos
-import { CompanyHome } from '../pages/company/Home'; // Tela de setup / home da empresa
-import { MembersPage } from '../pages/company/Members';
-import { TeamsPage } from '../pages/company/Teams';
-import { IntegrationsPage } from '../pages/company/Integrations';
+import { CompanyHome } from '../pages/company/Home';
+
+// Lazy load — páginas pesadas (Recharts, listas grandes, etc.)
+const Dashboard = lazy(() => import('../pages/Dashboard').then(m => ({ default: m.Dashboard })));
+const InboxPage = lazy(() => import('../pages/Inbox').then(m => ({ default: m.Inbox })));
+const Deals = lazy(() => import('../pages/Deals').then(m => ({ default: m.Deals })));
+const Tasks = lazy(() => import('../pages/Tasks').then(m => ({ default: m.Tasks })));
+const AiAgents = lazy(() => import('../pages/AiAgents').then(m => ({ default: m.AiAgents })));
+const AiAgentDetail = lazy(() => import('../pages/AiAgentDetail').then(m => ({ default: m.AiAgentDetail })));
+const Contacts = lazy(() => import('../pages/Contacts').then(m => ({ default: m.Contacts })));
+const CompanySettings = lazy(() => import('../pages/CompanySettings').then(m => ({ default: m.CompanySettings })));
+const MembersPage = lazy(() => import('../pages/company/Members').then(m => ({ default: m.MembersPage })));
+const TeamsPage = lazy(() => import('../pages/company/Teams').then(m => ({ default: m.TeamsPage })));
+const IntegrationsPage = lazy(() => import('../pages/company/Integrations').then(m => ({ default: m.IntegrationsPage })));
+
+const PageSkeleton = () => (
+  <div className="max-w-7xl mx-auto space-y-8 animate-pulse">
+    <div className="h-10 bg-white/5 rounded w-1/3 mb-8" />
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {[1, 2, 3].map(i => <div key={i} className="h-28 bg-white/5 rounded-xl" />)}
+    </div>
+    <div className="h-64 bg-white/5 rounded-xl" />
+  </div>
+);
 
 // Admin Pages
 import { AdminShell } from '../components/admin/AdminShell';
@@ -55,22 +68,22 @@ export const AppRoutes: React.FC = () => {
           </ProtectedRoute>
         }
       >
-        {/* Redireciona / para /home (empresa) */}
-        <Route index element={<Navigate to="home" replace />} />
-        <Route path="home" element={<CompanyHome />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="inbox/*" element={<InboxPage />} />
-        <Route path="tasks" element={<Tasks />} />
-        <Route path="contacts" element={<Contacts />} />
+        {/* Redireciona / para home ou dashboard (agent vai para dashboard) */}
+        <Route index element={<IndexRedirect />} />
+        <Route path="home" element={<AgentRestrictedRoute><CompanyHome /></AgentRestrictedRoute>} />
+        <Route path="dashboard" element={<Suspense fallback={<PageSkeleton />}><Dashboard /></Suspense>} />
+        <Route path="inbox/*" element={<Suspense fallback={<PageSkeleton />}><InboxPage /></Suspense>} />
+        <Route path="tasks" element={<Suspense fallback={<PageSkeleton />}><Tasks /></Suspense>} />
+        <Route path="contacts" element={<Suspense fallback={<PageSkeleton />}><Contacts /></Suspense>} />
         <Route path="companies" element={<div className="text-stone-400 p-8">Companies Module</div>} />
-        <Route path="deals" element={<Deals />} />
-        <Route path="ai-agents" element={<AiAgents />} />
-        <Route path="ai-agents/:agentId" element={<AiAgentDetail />} />
-        <Route path="members" element={<MembersPage />} />
-        <Route path="teams" element={<TeamsPage />} />
-        <Route path="integrations" element={<IntegrationsPage />} />
+        <Route path="deals" element={<Suspense fallback={<PageSkeleton />}><Deals /></Suspense>} />
+        <Route path="ai-agents" element={<Suspense fallback={<PageSkeleton />}><AiAgents /></Suspense>} />
+        <Route path="ai-agents/:agentId" element={<Suspense fallback={<PageSkeleton />}><AiAgentDetail /></Suspense>} />
+        <Route path="members" element={<Suspense fallback={<PageSkeleton />}><MembersPage /></Suspense>} />
+        <Route path="teams" element={<Suspense fallback={<PageSkeleton />}><TeamsPage /></Suspense>} />
+        <Route path="integrations" element={<AgentRestrictedRoute><Suspense fallback={<PageSkeleton />}><IntegrationsPage /></Suspense></AgentRestrictedRoute>} />
         <Route path="settings" element={<div className="text-stone-400 p-8">Configurações gerais em breve.</div>} />
-        <Route path="settings/team" element={<CompanySettings />} />
+        <Route path="settings/team" element={<Suspense fallback={<PageSkeleton />}><CompanySettings /></Suspense>} />
       </Route>
 
       {/* Admin Backoffice */}

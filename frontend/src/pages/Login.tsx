@@ -66,7 +66,7 @@ export const Login: React.FC = () => {
           </p>
         </div>
 
-        {/* Login Form (Mock) */}
+        {/* Login Form */}
         <div className="glass-panel p-8 rounded-2xl">
           <h2 className="text-xl font-medium text-primary mb-6">Acesso à Plataforma</h2>
           

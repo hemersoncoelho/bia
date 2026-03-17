@@ -16,6 +16,7 @@ import {
   ChevronsLeft,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { getAttendeeTextColor } from '../../utils/attendeeColors';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTenant } from '../../contexts/TenantContext';
@@ -832,7 +833,7 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
                 <span
                   className={`w-1.5 h-1.5 rounded-full ${isClosed ? 'bg-stone-600' : 'bg-emerald-500'}`}
                 />
-                <span className="text-[10px] text-stone-600 font-mono uppercase tracking-wider">
+                <span className={`text-[10px] font-mono uppercase tracking-wider ${getAttendeeTextColor(conversation.assigned_to_name ?? '')}`}>
                   {conversation.assigned_to_name
                     ? `${conversation.assigned_to_name.split(' ')[0]}`
                     : 'Não atribuído'}

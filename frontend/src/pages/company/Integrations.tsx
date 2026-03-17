@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTenant } from '../../contexts/TenantContext';
+import { WhatsAppConnectModal } from '../../components/Integrations/WhatsAppConnectModal';
+import { uazapiService } from '../../services/uazapiService';
+import type { IntegrationStatus as UazapiStatus } from '../../services/uazapiService';
 import {
   Plug,
   CheckCircle2,
@@ -22,12 +25,14 @@ interface Integration {
   color: string;
 }
 
+// Status vem do banco quando houver tabela de integrações.
+// Por ora, todas desconectadas — sem dados fake.
 const INTEGRATIONS: Integration[] = [
   {
     id: 'whatsapp',
     name: 'WhatsApp Business',
     description: 'Atendimento via WhatsApp com API oficial da Meta.',
-    status: 'connected',
+    status: 'disconnected',
     category: 'messaging',
     icon: '💬',
     color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
@@ -45,7 +50,7 @@ const INTEGRATIONS: Integration[] = [
     id: 'instagram',
     name: 'Instagram Direct',
     description: 'Responda mensagens diretas do Instagram pelo Inbox.',
-    status: 'pending',
+    status: 'disconnected',
     category: 'social',
     icon: '📸',
     color: 'text-pink-400 bg-pink-500/10 border-pink-500/20',
@@ -72,7 +77,7 @@ const INTEGRATIONS: Integration[] = [
     id: 'api',
     name: 'API / Webhook',
     description: 'Integre sistemas externos via REST API ou webhooks.',
-    status: 'connected',
+    status: 'disconnected',
     category: 'api',
     icon: '⚡',
     color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
@@ -107,17 +112,47 @@ const CATEGORY_LABELS: Record<Integration['category'], string> = {
 export const IntegrationsPage: React.FC = () => {
   const { currentCompany } = useTenant();
   const [activeCategory, setActiveCategory] = useState<'all' | Integration['category']>('all');
+  const [waStatus, setWaStatus] = useState<UazapiStatus>('disconnected');
+  const [isWppModalOpen, setIsWppModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (currentCompany) {
+      loadStatus();
+    }
+  }, [currentCompany]);
+
+  const loadStatus = async () => {
+     try {
+       const res = await uazapiService.getStatus(currentCompany!.id);
+       setWaStatus(res.status || 'disconnected');
+     } catch (err) {
+       // 401 = sessão expirada ou JWT inválido; outros erros = falha na função
+       // Mantém 'disconnected' para não quebrar a página
+       console.warn("Status WhatsApp não disponível:", err);
+       setWaStatus('disconnected');
+     }
+  };
 
   if (!currentCompany) return null;
 
   const categories: Array<'all' | Integration['category']> = ['all', 'messaging', 'email', 'social', 'api'];
 
+  const dynamicIntegrations = INTEGRATIONS.map(int => {
+    if (int.id === 'whatsapp') {
+      let mappedStatus: IntegrationStatus = 'disconnected';
+      if (waStatus === 'connected') mappedStatus = 'connected';
+      if (waStatus === 'connecting') mappedStatus = 'pending';
+      return { ...int, status: mappedStatus };
+    }
+    return int;
+  });
+
   const filtered =
     activeCategory === 'all'
-      ? INTEGRATIONS
-      : INTEGRATIONS.filter((i) => i.category === activeCategory);
+      ? dynamicIntegrations
+      : dynamicIntegrations.filter((i) => i.category === activeCategory);
 
-  const connectedCount = INTEGRATIONS.filter((i) => i.status === 'connected').length;
+  const connectedCount = dynamicIntegrations.filter((i) => i.status === 'connected').length;
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 reveal active">
@@ -133,9 +168,13 @@ export const IntegrationsPage: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono uppercase tracking-wider">
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono uppercase tracking-wider ${
+            connectedCount > 0
+              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+              : 'bg-white/5 border border-border text-stone-500'
+          }`}>
             <CheckCircle2 size={14} />
-            {connectedCount} conectadas
+            {connectedCount > 0 ? `${connectedCount} conectada${connectedCount !== 1 ? 's' : ''}` : 'Nenhuma conectada'}
           </div>
         </div>
       </div>
@@ -160,9 +199,21 @@ export const IntegrationsPage: React.FC = () => {
       {/* Integration cards grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {filtered.map((integration) => (
-          <IntegrationCard key={integration.id} integration={integration} />
+          <IntegrationCard 
+             key={integration.id} 
+             integration={integration} 
+             onConnect={() => {
+                if (integration.id === 'whatsapp') setIsWppModalOpen(true);
+             }}
+          />
         ))}
       </div>
+
+      <WhatsAppConnectModal 
+         isOpen={isWppModalOpen} 
+         onClose={() => setIsWppModalOpen(false)} 
+         onSuccess={loadStatus} 
+      />
 
       {/* Docs / Help section */}
       <div className="glass-panel p-6 rounded-2xl border border-dashed border-border flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -184,7 +235,7 @@ export const IntegrationsPage: React.FC = () => {
   );
 };
 
-const IntegrationCard: React.FC<{ integration: Integration }> = ({ integration }) => {
+const IntegrationCard: React.FC<{ integration: Integration; onConnect: () => void }> = ({ integration, onConnect }) => {
   const statusCfg = STATUS_CONFIG[integration.status];
 
   return (
@@ -213,12 +264,20 @@ const IntegrationCard: React.FC<{ integration: Integration }> = ({ integration }
       {/* Action */}
       <div className="mt-auto pt-4 border-t border-border">
         {integration.status === 'connected' ? (
-          <button className="flex items-center gap-2 text-xs text-stone-400 hover:text-primary transition-colors">
+          <button 
+             onClick={onConnect}
+             className="flex items-center gap-2 text-xs text-stone-400 hover:text-primary transition-colors"
+          >
             <Settings size={14} />
             Gerenciar configuração
           </button>
         ) : (
-          <button className="w-full py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-stone-300 transition-colors flex items-center justify-center gap-2">
+          <button 
+             onClick={onConnect}
+             title={integration.id !== 'whatsapp' ? 'Em breve' : ''}
+             disabled={integration.id !== 'whatsapp'}
+             className="w-full py-2 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-stone-300 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <Plug size={14} />
             {integration.status === 'pending' ? 'Continuar configuração' : 'Conectar'}
           </button>

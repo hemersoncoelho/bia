@@ -30,15 +30,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // double-mounts components, causing two concurrent lock requests on the
     // Supabase auth token. The second request "steals" the lock, aborting the first
     // and leaving sessionState stuck on 'loading'.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[Auth] onAuthStateChange event:', event, '| session:', !!session);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!mounted) return;
 
       if (session) {
-        // We have a valid session — fetch profile and set authenticated
         await handleSessionUpdate(session);
       } else {
-        console.log('[Auth] No session, setting unauthenticated');
         setUser(null);
         setSessionState('unauthenticated');
       }
@@ -68,7 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data: profile, error } = await Promise.race([
         supabase
           .from('user_profiles')
-          .select('*')
+          .select('id, full_name, avatar_url, system_role')
           .eq('id', session.user.id)
           .single(),
         new Promise<{ data: null; error: Error }>((resolve) =>

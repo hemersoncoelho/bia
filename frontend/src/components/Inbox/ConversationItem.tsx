@@ -1,5 +1,6 @@
 import React from 'react';
 import { Bot, Zap, UserRound, UserX } from 'lucide-react';
+import { getAttendeeBadgeClasses } from '../../utils/attendeeColors';
 
 export interface ConversationItemProps {
   conversation: any;
@@ -141,7 +142,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
 
           {/* Atendente atribuído */}
           {conversation.assigned_to_name ? (
-            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-sky-300 bg-sky-500/10 px-1.5 py-0.5 rounded-md border border-sky-500/20 truncate max-w-[120px]">
+            <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md border truncate max-w-[120px] ${getAttendeeBadgeClasses(conversation.assigned_to_name)}`}>
               <UserRound size={10} className="shrink-0" />
               {conversation.assigned_to_name.split(' ')[0]}
             </span>

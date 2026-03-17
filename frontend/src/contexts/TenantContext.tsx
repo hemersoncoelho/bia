@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import type { Company, UserProfile, Role } from '../types';
 import { useAuth } from './AuthContext';
 import { supabase } from '../lib/supabase';
@@ -127,7 +127,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     fetchCompanyRole();
   }, [user, currentCompany, impersonatedUser]);
 
-  const setCompany = (companyId: string) => {
+  const setCompany = useCallback((companyId: string) => {
     const company = availableCompanies.find(c => c.id === companyId);
     if (company) {
       setCurrentCompany(company);
@@ -136,9 +136,9 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setImpersonatedUser(null);
       _setImpersonatedUser(null);
     }
-  };
+  }, [availableCompanies, _setImpersonatedUser]);
 
-  const enableSupportMode = async (companyId: string, simulateUser?: UserProfile) => {
+  const enableSupportMode = useCallback(async (companyId: string, simulateUser?: UserProfile) => {
     if (user?.role !== 'system_admin' && user?.role !== 'platform_admin') return;
     
     const company = availableCompanies.find(c => c.id === companyId);
@@ -160,31 +160,42 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
          _setImpersonatedUser(simulateUser);
       }
     }
-  };
+  }, [user, availableCompanies]);
 
-  const disableSupportMode = () => {
+  const disableSupportMode = useCallback(() => {
     setIsSupportMode(false);
     setImpersonatedUser(null);
     _setImpersonatedUser(null);
     setCurrentCompany(null);
     localStorage.removeItem(STORAGE_KEY);
-  };
+  }, [_setImpersonatedUser]);
+
+  const value = useMemo(() => ({
+    currentCompany,
+    availableCompanies,
+    companyRole,
+    setCompany,
+    isSupportMode,
+    tenantLoading,
+    impersonatedUser,
+    enableSupportMode,
+    disableSupportMode,
+    refreshCompanies: fetchCompanies,
+  }), [
+    currentCompany,
+    availableCompanies,
+    companyRole,
+    setCompany,
+    isSupportMode,
+    tenantLoading,
+    impersonatedUser,
+    enableSupportMode,
+    disableSupportMode,
+    fetchCompanies,
+  ]);
 
   return (
-    <TenantContext.Provider 
-      value={{ 
-        currentCompany, 
-        availableCompanies, 
-        companyRole,
-        setCompany, 
-        isSupportMode, 
-        tenantLoading,
-        impersonatedUser,
-        enableSupportMode, 
-        disableSupportMode,
-        refreshCompanies: fetchCompanies,
-      }}
-    >
+    <TenantContext.Provider value={value}>
       {children}
     </TenantContext.Provider>
   );

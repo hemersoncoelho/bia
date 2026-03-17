@@ -11,6 +11,7 @@ import {
   Circle,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getAttendeeTextColor } from '../utils/attendeeColors';
 import { useTenant } from '../contexts/TenantContext';
 import { useAuth } from '../contexts/AuthContext';
 import type { Task, TaskStatus } from '../types';
@@ -168,7 +169,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onStatusChange }) => {
 
         <div className="flex items-center gap-4 mt-2 flex-wrap">
           {task.assigned_to_name && (
-            <span className="flex items-center gap-1 text-xs text-text-muted">
+            <span className={`flex items-center gap-1 text-xs font-medium ${getAttendeeTextColor(task.assigned_to_name)}`}>
               <User size={11} />
               {task.assigned_to_name.split(' ')[0]}
             </span>

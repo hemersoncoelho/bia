@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTenant } from '../../contexts/TenantContext';
+import { useCompanySummary } from '../../hooks/useCompanySummary';
 import { 
   Users, 
   UserPlus, 
@@ -16,8 +17,12 @@ import { useNavigate } from 'react-router-dom';
 export const CompanyDashboard: React.FC = () => {
   const { currentCompany } = useTenant();
   const navigate = useNavigate();
+  const { data: summary, loading } = useCompanySummary(currentCompany?.id ?? null);
 
   if (!currentCompany) return null;
+
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(val);
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 reveal active">
@@ -81,10 +86,22 @@ export const CompanyDashboard: React.FC = () => {
                 Resumo Rápido
             </h2>
             <div className="space-y-6 flex-1">
-                <MetricRow label="Membros" value="12" icon={<Users size={16} />} />
-                <MetricRow label="Times" value="3" icon={<LayoutDashboard size={16} />} />
-                <MetricRow label="Conversas Abertas" value="48" icon={<MessageSquare size={16} />} />
-                <MetricRow label="Deals em Aberto" value="R$ 125k" icon={<TrendingUp size={16} />} />
+                {loading ? (
+                  <div className="space-y-4">
+                    {[1, 2, 3, 4].map((i) => (
+                      <div key={i} className="h-8 bg-white/5 rounded animate-pulse" />
+                    ))}
+                  </div>
+                ) : summary ? (
+                  <>
+                    <MetricRow label="Membros" value={summary.totalMembers.toString()} icon={<Users size={16} />} />
+                    <MetricRow label="Times" value={summary.totalTeams.toString()} icon={<LayoutDashboard size={16} />} />
+                    <MetricRow label="Conversas Abertas" value={summary.openConversations.toString()} icon={<MessageSquare size={16} />} />
+                    <MetricRow label="Deals em Aberto" value={formatCurrency(summary.openDealsValue)} icon={<TrendingUp size={16} />} />
+                  </>
+                ) : (
+                  <div className="text-sm text-stone-500">Sem dados</div>
+                )}
             </div>
             <button 
                 onClick={() => navigate('/deals')}
@@ -98,30 +115,52 @@ export const CompanyDashboard: React.FC = () => {
 
       {/* Main Operational View (Existing Dashboard Charts can go here or below) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Placeholder for small list of members */}
         <div className="glass-panel p-6 rounded-2xl">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-sm font-mono uppercase tracking-[0.2em] text-stone-500">Membros Recentes</h2>
                 <button onClick={() => navigate('/settings/team')} className="text-xs text-stone-400 hover:text-primary transition-colors">Ver todos</button>
             </div>
             <div className="space-y-4">
-                <MemberItem name="Alice Silva" role="Admin" status="online" />
-                <MemberItem name="Bruno Costa" role="Agent" status="busy" />
-                <MemberItem name="Carla Souza" role="Manager" status="offline" />
+                {loading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="h-12 bg-white/5 rounded-lg animate-pulse" />
+                    ))}
+                  </div>
+                ) : summary?.recentMembers && summary.recentMembers.length > 0 ? (
+                  summary.recentMembers.slice(0, 5).map((m) => (
+                    <MemberItem key={m.id} name={m.full_name} role={m.role} />
+                  ))
+                ) : (
+                  <p className="text-sm text-stone-500 italic">Nenhum membro na equipe</p>
+                )}
             </div>
         </div>
 
-        {/* Current Pipeline Status */}
         <div className="glass-panel p-6 rounded-2xl">
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-sm font-mono uppercase tracking-[0.2em] text-stone-500">Pipeline Comercial</h2>
                 <button onClick={() => navigate('/deals')} className="text-xs text-stone-400 hover:text-primary transition-colors">Ir para Pipeline</button>
             </div>
             <div className="space-y-4">
-               <PipelineStageRow label="Leads" count={24} color="bg-blue-500" />
-               <PipelineStageRow label="Qualificação" count={12} color="bg-indigo-500" />
-               <PipelineStageRow label="Proposta" count={5} color="bg-purple-500" />
-               <PipelineStageRow label="Fechamento" count={3} color="bg-emerald-500" />
+                {loading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3, 4].map((i) => (
+                      <div key={i} className="h-6 bg-white/5 rounded animate-pulse" />
+                    ))}
+                  </div>
+                ) : summary?.pipelineStages && summary.pipelineStages.length > 0 ? (
+                  summary.pipelineStages.map((s) => (
+                    <PipelineStageRow
+                      key={s.stage_name}
+                      label={s.stage_name}
+                      count={s.deal_count}
+                      color={s.color ?? '#3B82F6'}
+                    />
+                  ))
+                ) : (
+                  <p className="text-sm text-stone-500 italic">Nenhum estágio configurado</p>
+                )}
             </div>
         </div>
       </div>
@@ -156,7 +195,7 @@ const MetricRow: React.FC<{ label: string; value: string; icon: React.ReactNode 
     </div>
 );
 
-const MemberItem: React.FC<{ name: string; role: string; status: 'online' | 'busy' | 'offline' }> = ({ name, role, status }) => (
+const MemberItem: React.FC<{ name: string; role: string }> = ({ name, role }) => (
     <div className="flex items-center justify-between p-3 rounded-lg bg-white/5">
         <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-stone-800 flex items-center justify-center text-xs font-bold text-stone-500">
@@ -167,19 +206,12 @@ const MemberItem: React.FC<{ name: string; role: string; status: 'online' | 'bus
                 <p className="text-[10px] text-stone-500 font-mono uppercase tracking-wider">{role}</p>
             </div>
         </div>
-        <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${
-                status === 'online' ? 'bg-emerald-500' : status === 'busy' ? 'bg-amber-500' : 'bg-stone-600'
-            }`} />
-            <span className="text-[10px] text-stone-500 font-mono uppercase tracking-widest">{status}</span>
-        </div>
     </div>
 );
 
 const PipelineStageRow: React.FC<{ label: string; count: number; color: string }> = ({ label, count, color }) => {
-    const maxVal = 30; // for mock bar scale
+    const maxVal = 30;
     const width = Math.min(100, (count / maxVal) * 100);
-    
     return (
         <div className="space-y-1.5">
             <div className="flex justify-between text-[11px] font-mono uppercase tracking-wider">
@@ -187,7 +219,7 @@ const PipelineStageRow: React.FC<{ label: string; count: number; color: string }
                 <span className="text-stone-200">{count}</span>
             </div>
             <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                <div className={`h-full ${color} rounded-full transition-all duration-1000`} style={{ width: `${width}%` }} />
+                <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${width}%`, backgroundColor: color }} />
             </div>
         </div>
     );

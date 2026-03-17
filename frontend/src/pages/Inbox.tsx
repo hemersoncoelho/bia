@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTenant } from '../contexts/TenantContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useDebounce } from '../hooks/useDebounce';
 import { supabase } from '../lib/supabase';
 import { ConversationList } from '../components/Inbox/ConversationList';
 import { ConversationDetail } from '../components/Inbox/ConversationDetail';
@@ -20,6 +21,7 @@ export const Inbox: React.FC = () => {
   const [conversations, setConversations] = useState<InboxConversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 250);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -75,23 +77,21 @@ export const Inbox: React.FC = () => {
     return () => { supabase.removeChannel(channel); };
   }, [currentCompany, fetchInbox]);
 
-  // Apply search + tab filters
-  const filteredConversations = conversations.filter(conv => {
-    // Tab filter
-    if (activeFilter === 'unread' && (conv.unread_count ?? 0) === 0) return false;
-    if (activeFilter === 'mine' && conv.assigned_to_id !== user?.id) return false;
-    if (activeFilter === 'team' && (!conv.assigned_to_id || conv.assigned_to_id === user?.id)) return false;
-
-    // Search filter
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const nameMatch = conv.contact_name?.toLowerCase().includes(q);
-      const previewMatch = conv.last_message_preview?.toLowerCase().includes(q);
-      if (!nameMatch && !previewMatch) return false;
-    }
-
-    return true;
-  });
+  // Apply search + tab filters (memoized + debounced search)
+  const filteredConversations = useMemo(() => {
+    return conversations.filter(conv => {
+      if (activeFilter === 'unread' && (conv.unread_count ?? 0) === 0) return false;
+      if (activeFilter === 'mine' && conv.assigned_to_id !== user?.id) return false;
+      if (activeFilter === 'team' && (!conv.assigned_to_id || conv.assigned_to_id === user?.id)) return false;
+      if (debouncedSearch) {
+        const q = debouncedSearch.toLowerCase();
+        const nameMatch = conv.contact_name?.toLowerCase().includes(q);
+        const previewMatch = conv.last_message_preview?.toLowerCase().includes(q);
+        if (!nameMatch && !previewMatch) return false;
+      }
+      return true;
+    });
+  }, [conversations, activeFilter, user?.id, debouncedSearch]);
 
   const handleSelectConversation = (id: string) => { navigate(`/inbox/${id}`, { preventScrollReset: true }); };
 

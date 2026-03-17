@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   Home,
@@ -18,19 +18,29 @@ import {
 import { useTenant } from '../../contexts/TenantContext';
 import { SupportBanner } from './SupportBanner';
 
+const NAV_ITEMS = [
+  { icon: Home, label: 'Home', to: '/home' },
+  { icon: BarChart3, label: 'Dashboard', to: '/dashboard' },
+  { icon: Inbox, label: 'Inbox', to: '/inbox' },
+  { icon: CheckSquare, label: 'Tarefas', to: '/tasks' },
+  { icon: Kanban, label: 'Pipeline', to: '/deals' },
+  { icon: Bot, label: 'Agentes IA', to: '/ai-agents' },
+  { icon: Plug, label: 'Integrações', to: '/integrations' },
+] as const;
+
+const RESTRICTED_FOR_AGENT = ['/home', '/integrations'];
+
 export const Sidebar: React.FC = () => {
-  const { isSupportMode } = useTenant();
+  const { isSupportMode, companyRole } = useTenant();
   const [contatosOpen, setContatosOpen] = useState(false);
 
-  const navItems = [
-    { icon: <Home size={20} />, label: 'Home', to: '/home' },
-    { icon: <BarChart3 size={20} />, label: 'Dashboard', to: '/dashboard' },
-    { icon: <Inbox size={20} />, label: 'Inbox', to: '/inbox' },
-    { icon: <CheckSquare size={20} />, label: 'Tarefas', to: '/tasks' },
-    { icon: <Kanban size={20} />, label: 'Pipeline', to: '/deals' },
-    { icon: <Bot size={20} />, label: 'Agentes IA', to: '/ai-agents' },
-    { icon: <Plug size={20} />, label: 'Integrações', to: '/integrations' },
-  ];
+  const navItems = useMemo(() => {
+    const items = NAV_ITEMS.map(({ icon: Icon, label, to }) => ({ icon: <Icon size={20} />, label, to }));
+    if (companyRole === 'agent') {
+      return items.filter((item) => !RESTRICTED_FOR_AGENT.includes(item.to));
+    }
+    return items;
+  }, [companyRole]);
 
   const activeLinkClass = 'bg-surface text-primary';
   const inactiveLinkClass = 'text-text-muted hover:text-primary hover:bg-surface/50';

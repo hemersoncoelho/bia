@@ -148,13 +148,13 @@ export const CompanyTeamAndUsers: React.FC<CompanyTeamAndUsersProps> = ({
     const { data, error } = await supabase
       .from('user_companies')
       .select(`
+        user_id,
         role_in_company,
         team_id,
         teams (id, name),
         user_profiles (
           id,
-          full_name,
-          email
+          full_name
         )
       `)
       .eq('company_id', companyId);
@@ -162,9 +162,9 @@ export const CompanyTeamAndUsers: React.FC<CompanyTeamAndUsersProps> = ({
     if (!error && data) {
       const mapped: CompanyUser[] = data
         .map((row: any) => ({
-          id: row.user_profiles?.id,
+          id: row.user_profiles?.id ?? row.user_id,
           full_name: row.user_profiles?.full_name ?? '—',
-          email: row.user_profiles?.email ?? '',
+          email: '', // email está em auth.users, não em user_profiles
           role_in_company: row.role_in_company,
           team_id: row.team_id ?? null,
           team_name: row.teams?.name,

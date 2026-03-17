@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useTenant } from '../contexts/TenantContext';
+import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { KpiCard } from '../components/Dashboard/KpiCard';
 import { PeriodFilter, periodToStartDate } from '../components/Dashboard/PeriodFilter';
@@ -86,7 +87,8 @@ const ChartPanel: React.FC<{ title: string; children: React.ReactNode }> = ({ ti
 // ── Dashboard ──────────────────────────────────────────────────
 
 export const Dashboard: React.FC = () => {
-  const { currentCompany } = useTenant();
+  const { currentCompany, companyRole, impersonatedUser } = useTenant();
+  const { user } = useAuth();
   const [period, setPeriod]       = useState<Period>('30d');
   const [loading, setLoading]     = useState(true);
   const [chartsLoading, setChartsLoading] = useState(true);
@@ -94,86 +96,141 @@ export const Dashboard: React.FC = () => {
   const [kpis, setKpis]           = useState<KPIData | null>(null);
   const [charts, setCharts]       = useState<ChartData | null>(null);
 
-  const fetchKPIs = async (activePeriod: Period) => {
+  const isAgentView = companyRole === 'agent';
+  const effectiveUserId = (impersonatedUser ?? user)?.id ?? null;
+
+  const fetchKPIs = useCallback(async (activePeriod: Period) => {
     if (!currentCompany) return;
     setLoading(true);
     setError(null);
     const since = periodToStartDate(activePeriod);
 
     try {
-      const [viewRes, messagesRes, qualifiedRes] = await Promise.all([
-        supabase
-          .from('v_company_kpis')
-          .select('total_leads, open_conversations, overdue_tasks')
-          .eq('company_id', currentCompany.id)
-          .single(),
+      if (isAgentView && effectiveUserId) {
+        // Agent: só dados atribuídos ao usuário
+        const [convRes, messagesRes, leadsRes, qualifiedRes, overdueRes] = await Promise.all([
+          supabase
+            .from('conversations')
+            .select('id', { count: 'exact', head: true })
+            .eq('company_id', currentCompany.id)
+            .eq('status', 'open')
+            .eq('assigned_to', effectiveUserId),
 
-        supabase
-          .from('messages')
-          .select('id, conversations!inner(company_id)', { count: 'exact', head: true })
-          .eq('conversations.company_id', currentCompany.id)
-          .gte('created_at', since),
+          supabase
+            .from('messages')
+            .select('id, conversations!inner(company_id, assigned_to)', { count: 'exact', head: true })
+            .eq('conversations.company_id', currentCompany.id)
+            .eq('conversations.assigned_to', effectiveUserId)
+            .gte('created_at', since),
 
-        supabase
-          .from('contacts')
-          .select('id', { count: 'exact', head: true })
-          .eq('company_id', currentCompany.id)
-          .eq('lifecycle_stage', 'qualified')
-          .gte('created_at', since),
-      ]);
+          supabase
+            .from('contacts')
+            .select('id', { count: 'exact', head: true })
+            .eq('company_id', currentCompany.id)
+            .eq('status', 'lead')
+            .eq('owner_user_id', effectiveUserId)
+            .gte('created_at', since),
 
-      if (viewRes.error && viewRes.error.code !== 'PGRST116') throw viewRes.error;
-      const v = viewRes.data;
+          supabase
+            .from('contacts')
+            .select('id', { count: 'exact', head: true })
+            .eq('company_id', currentCompany.id)
+            .eq('status', 'active')
+            .eq('owner_user_id', effectiveUserId)
+            .gte('created_at', since),
 
-      setKpis({
-        total_messages:     messagesRes.count  ?? 0,
-        total_leads:        v?.total_leads        ?? 0,
-        open_conversations: v?.open_conversations ?? 0,
-        qualified_leads:    qualifiedRes.count ?? 0,
-        overdue_tasks:      v?.overdue_tasks     ?? 0,
-      });
+          supabase
+            .from('tasks')
+            .select('id', { count: 'exact', head: true })
+            .eq('company_id', currentCompany.id)
+            .eq('assigned_to_user_id', effectiveUserId)
+            .lt('due_at', new Date().toISOString())
+            .or('status.eq.pending,status.eq.open'),
+        ]);
+
+        setKpis({
+          total_messages:     messagesRes.count  ?? 0,
+          total_leads:        leadsRes.count     ?? 0,
+          open_conversations: convRes.count      ?? 0,
+          qualified_leads:    qualifiedRes.count ?? 0,
+          overdue_tasks:      overdueRes.count ?? 0,
+        });
+      } else {
+        // Admin/gerente: visão da empresa inteira
+        const [viewRes, messagesRes, qualifiedRes] = await Promise.all([
+          supabase
+            .from('v_company_kpis')
+            .select('total_leads, open_conversations, overdue_tasks')
+            .eq('company_id', currentCompany.id)
+            .single(),
+
+          supabase
+            .from('messages')
+            .select('id, conversations!inner(company_id)', { count: 'exact', head: true })
+            .eq('conversations.company_id', currentCompany.id)
+            .gte('created_at', since),
+
+          supabase
+            .from('contacts')
+            .select('id', { count: 'exact', head: true })
+            .eq('company_id', currentCompany.id)
+            .eq('status', 'active')
+            .gte('created_at', since),
+        ]);
+
+        if (viewRes.error && viewRes.error.code !== 'PGRST116') throw viewRes.error;
+        const v = viewRes.data;
+
+        setKpis({
+          total_messages:     messagesRes.count  ?? 0,
+          total_leads:        v?.total_leads        ?? 0,
+          open_conversations: v?.open_conversations ?? 0,
+          qualified_leads:    qualifiedRes.count ?? 0,
+          overdue_tasks:      v?.overdue_tasks     ?? 0,
+        });
+      }
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar KPIs.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentCompany, isAgentView, effectiveUserId]);
 
-  const fetchCharts = async (activePeriod: Period) => {
+  const fetchCharts = useCallback(async (activePeriod: Period) => {
     if (!currentCompany) return;
     setChartsLoading(true);
     const since = periodToStartDate(activePeriod);
 
+    let convQuery = supabase
+      .from('conversations')
+      .select('channel, priority')
+      .eq('company_id', currentCompany.id)
+      .gte('created_at', since);
+    let contactsQuery = supabase
+      .from('contacts')
+      .select('status')
+      .eq('company_id', currentCompany.id)
+      .gte('created_at', since);
+    let tasksQuery = supabase
+      .from('tasks')
+      .select('status')
+      .eq('company_id', currentCompany.id)
+      .gte('created_at', since);
+
+    if (isAgentView && effectiveUserId) {
+      convQuery = convQuery.eq('assigned_to', effectiveUserId);
+      contactsQuery = contactsQuery.eq('owner_user_id', effectiveUserId);
+      tasksQuery = tasksQuery.eq('assigned_to_user_id', effectiveUserId);
+    }
+
     try {
-      const [convCanalRes, contatosRes, tasksRes, convPriorRes] = await Promise.all([
-        // Conversas por canal
-        supabase
-          .from('conversations')
-          .select('channel')
-          .eq('company_id', currentCompany.id)
-          .gte('created_at', since),
-
-        // Contatos por estágio
-        supabase
-          .from('contacts')
-          .select('lifecycle_stage')
-          .eq('company_id', currentCompany.id)
-          .gte('created_at', since),
-
-        // Tasks por status
-        supabase
-          .from('tasks')
-          .select('status')
-          .eq('company_id', currentCompany.id)
-          .gte('created_at', since),
-
-        // Conversas por prioridade
-        supabase
-          .from('conversations')
-          .select('priority')
-          .eq('company_id', currentCompany.id)
-          .gte('created_at', since),
+      const [convRes, contatosRes, tasksRes] = await Promise.all([
+        convQuery,
+        contactsQuery,
+        tasksQuery,
       ]);
+      const convCanalRes = { data: convRes.data };
+      const convPriorRes = { data: convRes.data };
 
       // Conversas por canal
       const canalCount: Record<string, number> = {};
@@ -185,10 +242,11 @@ export const Dashboard: React.FC = () => {
         .map(([canal, total]) => ({ canal: CANAL_LABELS[canal] ?? canal, total }))
         .sort((a, b) => b.total - a.total);
 
-      // Contatos por estágio (ordem do funil)
+      // Contatos por estágio (status: lead->lead, active->qualified, inactive->lost)
+      const statusToEstagio: Record<string, string> = { lead: 'lead', active: 'qualified', inactive: 'lost' };
       const estagioCount: Record<string, number> = {};
       contatosRes.data?.forEach(r => {
-        const k = r.lifecycle_stage ?? 'lead';
+        const k = statusToEstagio[r.status ?? 'lead'] ?? 'lead';
         estagioCount[k] = (estagioCount[k] ?? 0) + 1;
       });
       const contatosPorEstagio = ESTAGIO_ORDER
@@ -225,19 +283,18 @@ export const Dashboard: React.FC = () => {
     } finally {
       setChartsLoading(false);
     }
-  };
+  }, [currentCompany, isAgentView, effectiveUserId]);
 
-  const handlePeriodChange = (p: Period) => {
+  const handlePeriodChange = useCallback((p: Period) => {
     setPeriod(p);
     fetchKPIs(p);
     fetchCharts(p);
-  };
+  }, [fetchKPIs, fetchCharts]);
 
   useEffect(() => {
     fetchKPIs(period);
     fetchCharts(period);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentCompany]);
+  }, [currentCompany, period, fetchKPIs, fetchCharts]);
 
   if (!currentCompany) {
     return (
