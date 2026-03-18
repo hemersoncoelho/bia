@@ -47,11 +47,9 @@ export const ProtectedRoute: React.FC<{
     );
   }
 
-  // Tenant Verification - users must select a company first
+  // Tenant Verification - users must select a company first (evita tela em branco)
   if (!currentCompany && !isSelectCompanyPage && !isAdminPage) {
-     if (availableCompanies.length > 0 || user.role === 'system_admin' || user.role === 'platform_admin') {
-         return <Navigate to="/select-company" replace />;
-     }
+    return <Navigate to="/select-company" replace />;
   }
 
   return <>{children}</>;

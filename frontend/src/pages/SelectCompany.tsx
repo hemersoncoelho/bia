@@ -9,13 +9,17 @@ export const SelectCompany: React.FC = () => {
   const { availableCompanies, setCompany } = useTenant();
   const navigate = useNavigate();
 
-  // If we only have 1 company and not platform admin, auto-select it and redirect safely
   React.useEffect(() => {
-    if (availableCompanies.length === 1 && user?.role !== 'platform_admin') {
+    const isAdmin = user?.role === 'platform_admin' || user?.role === 'system_admin';
+    if (availableCompanies.length === 0 && isAdmin) {
+      navigate('/admin', { replace: true });
+      return;
+    }
+    if (availableCompanies.length === 1 && !isAdmin) {
       setCompany(availableCompanies[0].id);
       navigate('/', { replace: true });
     }
-  }, [availableCompanies, user]);
+  }, [availableCompanies, user, setCompany, navigate]);
 
   const handleSelect = (companyId: string) => {
     setCompany(companyId);
@@ -46,7 +50,7 @@ export const SelectCompany: React.FC = () => {
             <h1 className="text-4xl font-medium tracking-tight text-primary mb-3">Selecione o Contexto</h1>
             <p className="text-text-muted text-sm max-w-md mx-auto">
               Escolha a empresa para acessar a visão operacional. 
-              {user?.role === 'platform_admin' && (
+              {(user?.role === 'platform_admin' || user?.role === 'system_admin') && (
                 <span className="block mt-2 text-amber-500 font-mono text-[10px] uppercase">
                   (Modo de Suporte: Todas as empresas disponíveis)
                 </span>
@@ -54,6 +58,12 @@ export const SelectCompany: React.FC = () => {
             </p>
          </div>
 
+         {availableCompanies.length === 0 && (
+           <div className="text-center py-12 px-6 rounded-xl border border-amber-500/20 bg-amber-500/5">
+             <p className="text-amber-400 font-medium">Nenhuma empresa vinculada</p>
+             <p className="text-sm text-text-muted mt-1">Contacte o administrador para obter acesso a uma empresa.</p>
+           </div>
+         )}
          <div className="grid grid-cols-1 gap-4">
             {availableCompanies.map((company) => (
                <button

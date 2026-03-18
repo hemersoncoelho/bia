@@ -75,6 +75,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (!error && profile) {
         console.log('[Auth] Profile loaded:', profile.full_name, profile.system_role);
+        // NOTE: DB stores 'platform_admin' but we expose 'system_admin' as the frontend role.
+        // Every guard that checks for admin access MUST check for BOTH 'system_admin'
+        // AND 'platform_admin' to remain safe against future DB or mapping changes.
         setUser({
           id: profile.id,
           email: session.user.email || '',
