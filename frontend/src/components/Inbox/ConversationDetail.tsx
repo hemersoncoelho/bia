@@ -141,7 +141,7 @@ interface TeamMember {
 
 interface TransferButtonProps {
   companyId: string;
-  onTransfer: (userId: string) => void;
+  onTransfer: (userId: string, userName?: string) => void;
 }
 
 const TransferButton: React.FC<TransferButtonProps> = ({ companyId, onTransfer }) => {
@@ -161,19 +161,22 @@ const TransferButton: React.FC<TransferButtonProps> = ({ companyId, onTransfer }
   const fetchMembers = useCallback(async () => {
     if (members.length > 0) return;
     setLoading(true);
-    const { data } = await supabase
-      .from('user_companies')
-      .select('user_id, user_profiles(id, full_name)')
-      .eq('company_id', companyId);
-    if (data) {
-      setMembers(
-        data
-          .map((d) => ({
-            id: (d.user_profiles as any)?.id as string,
-            full_name: ((d.user_profiles as any)?.full_name as string) || 'Usuário',
-          }))
-          .filter((m) => m.id)
-      );
+    // Usa company_memberships como fonte canônica (pós-consolidação Etapa 2)
+    const { data: memberships } = await supabase
+      .from('company_memberships')
+      .select('user_id')
+      .eq('company_id', companyId)
+      .eq('status', 'active');
+
+    if (memberships?.length) {
+      const ids = memberships.map((m) => m.user_id).filter(Boolean);
+      const { data: profiles } = await supabase
+        .from('user_profiles')
+        .select('id, full_name')
+        .in('id', ids);
+      if (profiles) {
+        setMembers(profiles.map((p) => ({ id: p.id, full_name: p.full_name || 'Usuário' })));
+      }
     }
     setLoading(false);
   }, [companyId, members.length]);
@@ -223,7 +226,7 @@ const TransferButton: React.FC<TransferButtonProps> = ({ companyId, onTransfer }
                   return (
                     <button
                       key={m.id}
-                      onClick={() => { onTransfer(m.id); setOpen(false); }}
+                      onClick={() => { onTransfer(m.id, m.full_name); setOpen(false); }}
                       className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-stone-300 hover:text-white hover:bg-white/5 transition-colors text-left"
                     >
                       <span className="w-6 h-6 rounded-full bg-stone-700 text-stone-300 text-[10px] font-semibold flex items-center justify-center shrink-0">
@@ -499,7 +502,7 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
   const { currentCompany } = useTenant();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
-  const [showContext, setShowContext] = useState(true);
+  const [showContext, setShowContext] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('context');
 
   // Tasks
@@ -640,7 +643,7 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
     fetchTasks();
   }, [fetchTasks]);
 
-  // Send message
+  // Send message — step 1: persiste no banco; step 2: despacha via UAZAPI (WhatsApp)
   const handleSendMessage = async (body: string, isInternal: boolean) => {
     if (!user || !conversation) return;
 
@@ -651,6 +654,7 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
       sender_type: 'agent',
       sender_id: user.id,
       body,
+      // 'queued' mostra indicador de loading na Timeline até confirmar
       status: isInternal ? 'sent' : 'queued',
       is_internal: isInternal,
       created_at: new Date().toISOString(),
@@ -659,18 +663,53 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
 
     setMessages((prev) => [...prev, newMsg]);
 
-    const { error, data } = await supabase.rpc('rpc_enqueue_outbound_message', {
+    // Passo 1 — gravar no banco
+    const { error: rpcError, data: rpcData } = await supabase.rpc('rpc_enqueue_outbound_message', {
       p_conversation_id: conversation.conversation_id,
       p_body: body,
       p_sender_id: user.id,
       p_is_internal: isInternal,
     });
 
-    if (error || !data?.success) {
+    if (rpcError || !rpcData?.success) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m))
+      );
+      return;
+    }
+
+    // Notas internas não vão para o WhatsApp
+    if (isInternal) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempId ? { ...m, status: 'sent' } : m))
+      );
+      if (onConversationUpdate) onConversationUpdate();
+      return;
+    }
+
+    // Passo 2 — despachar via UAZAPI (nunca expõe token no cliente)
+    const { error: dispatchError, data: dispatchData } = await supabase.functions.invoke<{
+      success: boolean;
+      error?: string;
+      dispatched?: boolean;
+    }>('send-whatsapp-message', {
+      body: {
+        conversation_id: conversation.conversation_id,
+        message_id: rpcData.message_id,
+        body,
+      },
+    });
+
+    if (dispatchError || !dispatchData?.success) {
+      const errMsg = dispatchData?.error || dispatchError?.message || 'Falha ao enviar mensagem.';
+      console.warn('[send-whatsapp-message]', errMsg);
       setMessages((prev) =>
         prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m))
       );
     } else {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempId ? { ...m, status: 'sent' } : m))
+      );
       if (onConversationUpdate) onConversationUpdate();
     }
   };
@@ -712,13 +751,28 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
     setHandoffLoading(false);
   };
 
-  const handleTransfer = async (userId: string) => {
+  const handleTransfer = async (userId: string, userName?: string) => {
     if (!conversation) return;
-    await supabase.rpc('rpc_assign_conversation', {
+    const { data } = await supabase.rpc('rpc_assign_conversation', {
       p_conversation_id: conversation.conversation_id,
       p_user_id: userId,
     });
-    if (onConversationUpdate) onConversationUpdate();
+    if (data?.success !== false) {
+      // Evento de sistema na timeline para rastrear a transferência
+      const sysMsg: Message = {
+        id: `sys-${Date.now()}`,
+        conversation_id: conversation.conversation_id,
+        sender_type: 'system',
+        body: userName
+          ? `Conversa transferida para ${userName}.`
+          : 'Conversa transferida.',
+        status: 'sent',
+        is_internal: false,
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, sysMsg]);
+      if (onConversationUpdate) onConversationUpdate();
+    }
   };
 
   const handleCloseConversation = async () => {
@@ -852,6 +906,24 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
                 agents={availableAgents}
                 onChangeMode={handleChangeMode}
               />
+            )}
+
+            {/* Botão dedicado Pausar IA — visível sempre que a IA está ativa */}
+            {!isClosed && currentMode !== 'human' && (
+              <button
+                onClick={() => handleChangeMode('human')}
+                disabled={handoffLoading}
+                title={currentMode === 'ai' ? 'Pausar IA' : 'Assumir atendimento'}
+                className={cn(
+                  'flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors disabled:opacity-50',
+                  currentMode === 'ai'
+                    ? 'text-indigo-400 border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 hover:text-indigo-300'
+                    : 'text-violet-400 border-violet-500/30 bg-violet-500/10 hover:bg-violet-500/20 hover:text-violet-300'
+                )}
+              >
+                <ZapOff size={11} />
+                {currentMode === 'ai' ? 'Pausar IA' : 'Só humano'}
+              </button>
             )}
 
             <div className="w-px h-5 bg-border mx-0.5" />
