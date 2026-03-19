@@ -52,6 +52,17 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({ isOp
        if (error) throw error;
        if (!data?.success) throw new Error(data?.error || 'Failed to create conversation');
 
+       // Despachar mensagem via UAZAPI quando canal for WhatsApp
+       if (channel === 'whatsapp' && data.message_id != null) {
+          await supabase.functions.invoke('send-whatsapp-message', {
+             body: {
+                conversation_id: data.conversation_id,
+                message_id: data.message_id,
+                body: message,
+             },
+          });
+       }
+
        // Success! Reset form and notify parent
        setContactName('');
        setIdentity('');
