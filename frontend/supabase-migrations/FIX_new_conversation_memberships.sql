@@ -123,6 +123,7 @@ DECLARE
     v_contact_id      UUID;
     v_conversation_id UUID;
     v_message_id      BIGINT;
+    v_norm            TEXT;
 BEGIN
     IF auth.uid() IS NULL THEN
         RETURN json_build_object('success', false, 'error', 'Usuário não autenticado.');
@@ -148,10 +149,15 @@ BEGIN
         END IF;
     END IF;
 
+    -- contact_identities usa normalized_value e channel_type (schema real do banco)
+    v_norm := CASE WHEN p_channel = 'whatsapp' THEN regexp_replace(p_identity, '[^0-9]', '', 'g') ELSE p_identity END;
+
     SELECT ci.contact_id INTO v_contact_id
     FROM public.contact_identities ci
     JOIN public.contacts c ON c.id = ci.contact_id
-    WHERE ci.identifier = p_identity AND c.company_id = p_company_id
+    WHERE ci.company_id = p_company_id
+      AND ci.channel_type::TEXT = p_channel
+      AND (ci.normalized_value = v_norm OR ci.display_value = p_identity)
     LIMIT 1;
 
     IF v_contact_id IS NULL THEN
@@ -159,8 +165,14 @@ BEGIN
         VALUES (p_company_id, p_contact_name, now())
         RETURNING id INTO v_contact_id;
 
-        INSERT INTO public.contact_identities (contact_id, provider, identifier)
-        VALUES (v_contact_id, p_channel, p_identity);
+        INSERT INTO public.contact_identities (company_id, contact_id, channel_type, identity_type, normalized_value, display_value)
+        VALUES (
+            p_company_id, v_contact_id,
+            p_channel::public.channel_type_enum,
+            CASE p_channel WHEN 'whatsapp' THEN 'phone' WHEN 'email' THEN 'email' ELSE 'external' END,
+            v_norm,
+            p_identity
+        );
     END IF;
 
     INSERT INTO public.conversations (

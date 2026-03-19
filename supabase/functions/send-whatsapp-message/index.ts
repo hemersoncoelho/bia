@@ -121,16 +121,17 @@ Deno.serve(async (req) => {
       return json({ success: true, dispatched: false, reason: 'Canal não é WhatsApp.' });
     }
 
-    // 5. Busca o telefone/JID WhatsApp do contato
+    // 5. Busca o telefone — contact_identities usa normalized_value e channel_type
     const { data: identity } = await adminClient
       .from('contact_identities')
-      .select('identifier')
+      .select('normalized_value, display_value')
       .eq('contact_id', conv.contact_id)
-      .or('provider.eq.whatsapp,channel_type.eq.whatsapp')
+      .eq('channel_type', 'whatsapp')
       .maybeSingle();
 
-    if (!identity?.identifier) {
-      // Tenta fallback: document do contato como número
+    let rawPhone: string | null = identity?.normalized_value || identity?.display_value || null;
+
+    if (!rawPhone) {
       const { data: contact } = await adminClient
         .from('contacts')
         .select('document')
@@ -146,10 +147,10 @@ Deno.serve(async (req) => {
         }
         return json({ success: false, error: 'Número de WhatsApp do contato não encontrado.' });
       }
-      identity!.identifier = contact.document;
+      rawPhone = contact.document;
     }
 
-    const phone = normalizePhone(identity.identifier);
+    const phone = normalizePhone(rawPhone);
     if (!phone) {
       if (message_id) {
         await adminClient.from('messages').update({ status: 'failed' }).eq('id', message_id);
