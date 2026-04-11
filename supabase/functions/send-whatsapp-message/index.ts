@@ -104,7 +104,16 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (!membership) {
-        return json({ success: false, error: 'Sem permissão para enviar nessa conversa.' });
+        const { data: legacyMembership } = await adminClient
+          .from('user_companies')
+          .select('user_id')
+          .eq('company_id', conv.company_id)
+          .eq('user_id', caller.id)
+          .maybeSingle();
+
+        if (!legacyMembership) {
+          return json({ success: false, error: 'Sem permissão para enviar nessa conversa.' });
+        }
       }
     }
 
@@ -121,33 +130,31 @@ Deno.serve(async (req) => {
       return json({ success: true, dispatched: false, reason: 'Canal não é WhatsApp.' });
     }
 
-    // 5. Busca o telefone — contact_identities usa normalized_value e channel_type
-    const { data: identity } = await adminClient
+    // 5. Busca o telefone — contact_identities com channel_type = 'whatsapp'
+    const { data: identities, error: idErr } = await adminClient
       .from('contact_identities')
-      .select('normalized_value, display_value')
+      .select('normalized_value, display_value, channel_type')
       .eq('contact_id', conv.contact_id)
-      .eq('channel_type', 'whatsapp')
-      .maybeSingle();
+      .eq('channel_type', 'whatsapp');
 
-    let rawPhone: string | null = identity?.normalized_value || identity?.display_value || null;
+    if (idErr) {
+      console.error('contact_identities query error:', idErr);
+    }
+
+    let rawPhone: string | null = null;
+    for (const id of (identities || [])) {
+      rawPhone = (id.normalized_value as string) || (id.display_value as string) || null;
+      if (rawPhone) break;
+    }
 
     if (!rawPhone) {
-      const { data: contact } = await adminClient
-        .from('contacts')
-        .select('document')
-        .eq('id', conv.contact_id)
-        .maybeSingle();
-
-      if (!contact?.document) {
-        if (message_id) {
-          await adminClient
-            .from('messages')
-            .update({ status: 'failed' })
-            .eq('id', message_id);
-        }
-        return json({ success: false, error: 'Número de WhatsApp do contato não encontrado.' });
+      if (message_id) {
+        await adminClient.from('messages').update({ status: 'failed' }).eq('id', message_id);
       }
-      rawPhone = contact.document;
+      return json({
+        success: false,
+        error: 'Número de WhatsApp do contato não encontrado. Verifique se o contato tem identidade WhatsApp em contact_identities (channel_type ou provider = whatsapp).',
+      });
     }
 
     const phone = normalizePhone(rawPhone);
@@ -183,40 +190,60 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 7. Envia mensagem via UAZAPI
-    // Endpoint: POST /message/sendText/{instanceName}
-    // Header: token: {instance_token}
-    // Body: { phone, message, delay? }
-    const uazapiRes = await fetch(
-      `${uazapiBaseUrl}/message/sendText/${integration.instance_id}`,
-      {
+    // 7. Envia mensagem via UAZAPI (OpenAPI: /send/text, body: number + text)
+    // Timeout de 8s para evitar que o Supabase mate a função por timeout (10s padrão)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    let uazapiRes: Response;
+    try {
+      uazapiRes = await fetch(`${uazapiBaseUrl}/send/text`, {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           token: integration.instance_token,
         },
         body: JSON.stringify({
-          phone,
-          message: body,
+          number: phone,
+          text: body,
           delay: 500,
         }),
+      });
+    } catch (fetchErr: unknown) {
+      clearTimeout(timeoutId);
+      const isTimeout = fetchErr instanceof Error && fetchErr.name === 'AbortError';
+      if (message_id) {
+        await adminClient.from('messages').update({ status: 'failed' }).eq('id', message_id);
       }
-    );
+      return json({
+        success: false,
+        error: isTimeout
+          ? 'UAZAPI não respondeu a tempo (timeout 8s). Verifique se a instância está ativa.'
+          : `Erro ao conectar com UAZAPI: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     let uazapiData: UazapiSendResponse = {};
     try {
       uazapiData = await uazapiRes.json();
     } catch (_) {
-      // ignora erro de parse
+      // ignora erro de parse — resposta pode não ter body JSON
     }
 
     const sent = uazapiRes.ok && !uazapiData.error;
 
-    // 8. Atualiza status da mensagem no banco
+    // 8. Atualiza status da mensagem no banco (inclui external_message_id para correlação)
     if (message_id) {
       await adminClient
         .from('messages')
-        .update({ status: sent ? 'sent' : 'failed' })
+        .update({
+          status: sent ? 'sent' : 'failed',
+          external_message_id: sent ? (uazapiData.key?.id || null) : null,
+          error_detail: sent ? null : (uazapiData.error || `UAZAPI HTTP ${uazapiRes.status}`),
+        })
         .eq('id', message_id);
     }
 

@@ -7,7 +7,7 @@ import { X, Send, Plus, Loader2 } from 'lucide-react';
 interface NewConversationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (conversationId: string) => void;
+  onSuccess: (conversationId: string, sendError?: string) => void;
 }
 
 export const NewConversationModal: React.FC<NewConversationModalProps> = ({ isOpen, onClose, onSuccess }) => {
@@ -52,15 +52,42 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({ isOp
        if (error) throw error;
        if (!data?.success) throw new Error(data?.error || 'Failed to create conversation');
 
+       // Se o número já tem uma conversa aberta → vai direto para ela (sem enviar WhatsApp)
+       if (data.reused) {
+          setContactName('');
+          setIdentity('');
+          setMessage('');
+          onSuccess(data.conversation_id);
+          onClose();
+          setLoading(false);
+          return;
+       }
+
        // Despachar mensagem via UAZAPI quando canal for WhatsApp
        if (channel === 'whatsapp' && data.message_id != null) {
-          await supabase.functions.invoke('send-whatsapp-message', {
+          const msgId = typeof data.message_id === 'string' ? Number(data.message_id) : data.message_id;
+          const { data: { session } } = await supabase.auth.getSession();
+          const { error: fnError, data: fnData } = await supabase.functions.invoke<{ success: boolean; error?: string }>('send-whatsapp-message', {
              body: {
                 conversation_id: data.conversation_id,
-                message_id: data.message_id,
+                message_id: msgId,
                 body: message,
              },
+             headers: session?.access_token
+               ? { Authorization: `Bearer ${session.access_token}` }
+               : undefined,
           });
+          if (fnError || !fnData?.success) {
+             const err = fnData?.error || fnError?.message || 'Falha ao enviar no WhatsApp.';
+             console.warn('[send-whatsapp-message]', err);
+             setContactName('');
+             setIdentity('');
+             setMessage('');
+             onSuccess(data.conversation_id, err);
+             onClose();
+             setLoading(false);
+             return;
+          }
        }
 
        // Success! Reset form and notify parent

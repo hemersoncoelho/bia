@@ -11,17 +11,36 @@
   --color-stone-800: #292524;
   --color-stone-900: #1c1917;
   
-  --color-background: #0A0A0B;
-  --color-surface: #141415;
-  --color-surface-hover: #1C1C1E;
-  --color-border: #27272A;
-  --color-text-main: #FAFAFA;
-  --color-text-muted: #A1A1AA;
-  --color-primary: #FFFFFF;
+  --color-background: var(--bg-main);
+  --color-bg-base: var(--bg-main);
+  --color-surface: var(--bg-surface);
+  --color-surface-hover: var(--bg-surface-hover);
+  --color-border: var(--border-color);
+  --color-text-main: var(--text-main);
+  --color-text-primary: var(--text-main);
+  --color-text-muted: var(--text-muted);
+  --color-primary: var(--primary);
 }
 
 @layer base {
   :root {
+    --text-main: #09090B;
+    --text-muted: #71717A;
+    --bg-main: #F4F4F5;
+    --bg-surface: #FFFFFF;
+    --bg-surface-hover: #E4E4E7;
+    --border-color: #D4D4D8;
+    --primary: #09090B;
+    
+    --sidebar-width-collapsed: 56px;
+    --sidebar-width-expanded: 220px;
+    --sidebar-transition: 280ms cubic-bezier(0.16, 1, 0.3, 1);
+    --topbar-height: 64px;
+    
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  .dark {
     --text-main: #FAFAFA;
     --text-muted: #A1A1AA;
     --bg-main: #0A0A0B;
@@ -29,11 +48,6 @@
     --bg-surface-hover: #1C1C1E;
     --border-color: #27272A;
     --primary: #FFFFFF;
-    
-    --sidebar-width: 256px;
-    --topbar-height: 64px;
-    
-    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   html, body {
@@ -77,4 +91,77 @@
   .glass-panel {
     @apply bg-[var(--bg-surface)] border border-[var(--border-color)] backdrop-blur-md;
   }
+}
+
+/* ─── Premium Compact Rail Sidebar (Supabase-style) ─── */
+.sidebar-compact {
+  width: var(--sidebar-width-collapsed);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Active Vertical Bar Indicator ─── */
+.sidebar-nav-item.is-active::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 16px;
+  border-radius: 0 3px 3px 0;
+  background: var(--primary);
+  transition: height 200ms ease;
+}
+
+/* ─── Floating Tooltip ─── */
+.sidebar-tooltip {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%) translateX(4px) scale(0.96);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  transition: opacity 0.15s ease, visibility 0.15s ease, transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 100;
+  margin-left: 10px;
+}
+
+/* Tooltip arrow */
+.sidebar-tooltip::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  width: 7px;
+  height: 7px;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Dark mode deeper shadows */
+.dark .sidebar-tooltip {
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.4), 0 4px 8px -4px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar-nav-item:hover .sidebar-tooltip,
+.group:hover > .sidebar-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) translateX(0px) scale(1);
+  transition-delay: 400ms;
 }

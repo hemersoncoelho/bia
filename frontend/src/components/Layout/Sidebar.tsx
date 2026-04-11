@@ -1,176 +1,158 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   Home,
   BarChart3,
   Inbox,
   CheckSquare,
-  Users,
   Kanban,
   Bot,
   UsersRound,
   Group,
   Plug,
   Settings,
-  ChevronDown,
   UserSearch,
+  type LucideIcon,
 } from 'lucide-react';
 import { useTenant } from '../../contexts/TenantContext';
 import { SupportBanner } from './SupportBanner';
 
-const NAV_ITEMS = [
-  { icon: Home, label: 'Home', to: '/home' },
-  { icon: BarChart3, label: 'Dashboard', to: '/dashboard' },
-  { icon: Inbox, label: 'Inbox', to: '/inbox' },
-  { icon: CheckSquare, label: 'Tarefas', to: '/tasks' },
-  { icon: Kanban, label: 'Pipeline', to: '/deals' },
-  { icon: Bot, label: 'Agentes IA', to: '/ai-agents' },
-  { icon: Plug, label: 'Integrações', to: '/integrations' },
-] as const;
+/* ─── Types ─── */
+interface NavItem {
+  icon: LucideIcon;
+  label: string;
+  to: string;
+}
+
+interface NavGroup {
+  section: string;
+  items: NavItem[];
+}
+
+/* ─── Navigation structure ─── */
+const NAV_GROUPS: NavGroup[] = [
+  {
+    section: 'OPERACIONAL',
+    items: [
+      { icon: Home, label: 'Home', to: '/home' },
+      { icon: BarChart3, label: 'Dashboard', to: '/dashboard' },
+      { icon: Inbox, label: 'Inbox', to: '/inbox' },
+      { icon: CheckSquare, label: 'Tarefas', to: '/tasks' },
+      { icon: Kanban, label: 'Pipeline', to: '/deals' },
+    ],
+  },
+  {
+    section: 'CONTATOS',
+    items: [
+      { icon: UserSearch, label: 'Leads', to: '/contacts' },
+      { icon: UsersRound, label: 'Equipe', to: '/members' },
+      { icon: Group, label: 'Times', to: '/teams' },
+    ],
+  },
+  {
+    section: 'AUTOMAÇÃO',
+    items: [
+      { icon: Bot, label: 'Agentes IA', to: '/ai-agents' },
+      { icon: Plug, label: 'Integrações', to: '/integrations' },
+    ],
+  },
+];
 
 const RESTRICTED_FOR_AGENT = ['/home', '/integrations'];
 
+/* ─── Nav item ─── */
+const SidebarNavItem: React.FC<{
+  icon: LucideIcon;
+  label: string;
+  to: string;
+  size?: number;
+}> = ({ icon: Icon, label, to, size = 18 }) => {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        `sidebar-nav-item relative flex items-center justify-center w-9 h-9 mx-auto rounded-lg transition-all duration-200 group
+         ${isActive
+           ? 'is-active bg-surface text-primary'
+           : 'text-text-muted hover:text-primary hover:bg-surface-hover'
+         }`
+      }
+    >
+      <Icon size={size} strokeWidth={1.8} className="shrink-0 relative z-[1]" />
+      <span className="sidebar-tooltip">{label}</span>
+    </NavLink>
+  );
+};
+
+/* ─── Sidebar ─── */
 export const Sidebar: React.FC = () => {
   const { isSupportMode, companyRole } = useTenant();
-  const [contatosOpen, setContatosOpen] = useState(false);
 
-  const navItems = useMemo(() => {
-    const items = NAV_ITEMS.map(({ icon: Icon, label, to }) => ({ icon: <Icon size={20} />, label, to }));
-    if (companyRole === 'agent') {
-      return items.filter((item) => !RESTRICTED_FOR_AGENT.includes(item.to));
-    }
-    return items;
+  const filteredGroups = useMemo(() => {
+    if (companyRole !== 'agent') return NAV_GROUPS;
+    return NAV_GROUPS.map((g) => ({
+      ...g,
+      items: g.items.filter((i) => !RESTRICTED_FOR_AGENT.includes(i.to)),
+    })).filter((g) => g.items.length > 0);
   }, [companyRole]);
-
-  const activeLinkClass = 'bg-surface text-primary';
-  const inactiveLinkClass = 'text-text-muted hover:text-primary hover:bg-surface/50';
-  const baseLinkClass =
-    'flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 group';
 
   return (
     <aside
-      className={`w-64 border-r flex flex-col h-full shrink-0 relative transition-colors duration-300
-        ${isSupportMode ? 'border-amber-800/40 bg-background' : 'border-border bg-background'}`}
+      className={`sidebar-compact border-r flex flex-col h-full shrink-0 relative z-50 overflow-visible
+        ${isSupportMode
+          ? 'border-amber-800/40 bg-background'
+          : 'border-border bg-background'
+        }`}
     >
-      {/* Acento suporte */}
+      {/* Support accent line */}
       {isSupportMode && (
-        <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b from-amber-500/80 via-amber-600/40 to-transparent rounded-r-full pointer-events-none" />
+        <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-gradient-to-b from-amber-500/80 via-amber-600/40 to-transparent pointer-events-none z-10" />
       )}
 
-      {/* Brand Header */}
-      <div className="h-16 flex items-center px-6 border-b border-border group cursor-pointer hover:bg-surface transition-colors shrink-0">
-        <div className="flex items-center gap-3">
-          <div
-            className={`w-8 h-8 rounded flex-center font-bold text-lg group-hover:rotate-12 transition-all duration-500
-              ${isSupportMode ? 'bg-amber-500/20 text-amber-400 border border-amber-600/30' : 'bg-primary text-background'}`}
-          >
-            S
-          </div>
-          <div className="flex flex-col leading-none">
-            <span className="font-bold tracking-tight text-lg text-primary">SalesIA</span>
-            {isSupportMode && (
-              <span className="text-[9px] font-mono uppercase tracking-widest text-amber-500/60 mt-0.5">Suporte Ativo</span>
+      {/* ─── Brand ─── */}
+      <div className="h-14 flex items-center justify-center cursor-pointer group relative shrink-0">
+        <div
+          className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-[13px] group-hover:rotate-3 transition-transform duration-300
+            ${isSupportMode
+              ? 'bg-amber-500/10 text-amber-500 border border-amber-600/30'
+              : 'bg-primary text-background'
+            }`}
+        >
+          S
+        </div>
+        <span className="sidebar-tooltip">SalesIA</span>
+      </div>
+
+      {/* ─── Navigation groups ─── */}
+      <nav className="flex-1 overflow-visible py-1 flex flex-col gap-3">
+        {filteredGroups.map((group, gi) => (
+          <div key={group.section} className="flex flex-col gap-1">
+            {group.items.map((item) => (
+              <SidebarNavItem
+                key={item.to}
+                icon={item.icon}
+                label={item.label}
+                to={item.to}
+              />
+            ))}
+
+            {/* Section divider */}
+            {gi < filteredGroups.length - 1 && (
+              <div className="w-4 h-px bg-border/50 mx-auto mt-2" />
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1">
-        <div className="px-3 mb-4">
-          <span className="text-xs font-mono uppercase text-text-muted tracking-widest">OPERACIONAL</span>
-        </div>
-
-        {/* Nav items sem submenu */}
-        {navItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) => `${baseLinkClass} ${isActive ? activeLinkClass : inactiveLinkClass}`}
-          >
-            <span className="opacity-70 group-hover:opacity-100 transition-opacity">{item.icon}</span>
-            {item.label}
-          </NavLink>
         ))}
-
-        {/* Contatos — accordion com Leads, Equipe e Times */}
-        <div className="pt-1">
-          <button
-            onClick={() => setContatosOpen((v) => !v)}
-            className={`${baseLinkClass} w-full justify-between ${inactiveLinkClass}`}
-          >
-            <span className="flex items-center gap-3">
-              <span className="opacity-70 group-hover:opacity-100 transition-opacity">
-                <Users size={20} />
-              </span>
-              Contatos
-            </span>
-            <ChevronDown
-              size={14}
-              className={`text-stone-500 transition-transform duration-200 ${contatosOpen ? 'rotate-180' : ''}`}
-            />
-          </button>
-
-          {contatosOpen && (
-            <div className="ml-4 mt-1 pl-3 border-l border-border space-y-1">
-              {/* Leads = tela atual de Contacts/CRM */}
-              <NavLink
-                to="/contacts"
-                className={({ isActive }) =>
-                  `${baseLinkClass} text-xs py-2 ${isActive ? activeLinkClass : inactiveLinkClass}`
-                }
-              >
-                <span className="opacity-70 group-hover:opacity-100 transition-opacity">
-                  <UserSearch size={16} />
-                </span>
-                Leads
-              </NavLink>
-
-              {/* Equipe = membros internos */}
-              <NavLink
-                to="/members"
-                className={({ isActive }) =>
-                  `${baseLinkClass} text-xs py-2 ${isActive ? activeLinkClass : inactiveLinkClass}`
-                }
-              >
-                <span className="opacity-70 group-hover:opacity-100 transition-opacity">
-                  <UsersRound size={16} />
-                </span>
-                Equipe
-              </NavLink>
-
-              {/* Times = agrupamentos operacionais */}
-              <NavLink
-                to="/teams"
-                className={({ isActive }) =>
-                  `${baseLinkClass} text-xs py-2 ${isActive ? activeLinkClass : inactiveLinkClass}`
-                }
-              >
-                <span className="opacity-70 group-hover:opacity-100 transition-opacity">
-                  <Group size={16} />
-                </span>
-                Times
-              </NavLink>
-            </div>
-          )}
-        </div>
       </nav>
 
-      {/* Settings */}
-      <div className="p-3 border-t border-border space-y-1">
-        <NavLink
+      {/* ─── Bottom ─── */}
+      <div className="flex flex-col gap-1 py-3 border-t border-border mt-auto overflow-visible">
+        <SupportBanner />
+        <SidebarNavItem
+          icon={Settings}
+          label="Configurações"
           to="/settings"
-          end
-          className={({ isActive }) => `${baseLinkClass} ${isActive ? activeLinkClass : inactiveLinkClass}`}
-        >
-          <span className="opacity-70 group-hover:opacity-100 transition-opacity">
-            <Settings size={20} />
-          </span>
-          Configurações
-        </NavLink>
+        />
       </div>
-
-      <SupportBanner />
     </aside>
   );
 };

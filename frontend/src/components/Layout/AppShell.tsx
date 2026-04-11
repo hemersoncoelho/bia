@@ -6,7 +6,7 @@ import { Topbar } from './Topbar';
 export const AppShell: React.FC = () => {
   return (
     <div className="flex h-screen bg-bg-base text-text-primary overflow-hidden">
-      {/* Sidebar is fixed on the left */}
+      {/* Compact sidebar — width transitions on hover via CSS */}
       <Sidebar />
       
       {/* Main Content Area */}

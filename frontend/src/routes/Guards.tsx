@@ -9,7 +9,7 @@ export const ProtectedRoute: React.FC<{
   allowedRoles?: Role[];
 }> = ({ children, allowedRoles }) => {
   const { sessionState, user } = useAuth();
-  const { currentCompany, availableCompanies, tenantLoading, isSupportMode } = useTenant();
+  const { currentCompany, tenantLoading, isSupportMode } = useTenant();
   const location = useLocation();
 
   if (sessionState === 'loading') {

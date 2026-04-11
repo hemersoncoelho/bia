@@ -22,7 +22,7 @@ export const Unauthorized: React.FC = () => {
           Voltar
         </button>
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/dashboard')}
           className="px-4 py-2 text-sm rounded-md bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
         >
           Ir para o Dashboard

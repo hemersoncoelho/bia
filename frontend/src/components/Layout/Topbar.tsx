@@ -1,12 +1,14 @@
 import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTenant } from '../../contexts/TenantContext';
-import { Search, Bell, Settings, User, LogOut, ChevronDown } from 'lucide-react';
+import { useTheme } from '../../contexts/ThemeContext';
+import { Search, Bell, Settings, User, LogOut, ChevronDown, Moon, Sun } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const Topbar: React.FC = () => {
   const { effectiveUser, logout } = useAuth();
   const { currentCompany, isSupportMode } = useTenant();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -42,6 +44,14 @@ export const Topbar: React.FC = () => {
             className="bg-bg-base border border-border rounded-full py-1.5 pl-9 pr-4 text-sm w-48 focus:w-64 transition-all duration-300 outline-none text-text-primary placeholder:text-text-muted/50 focus:border-border-hover/50"
           />
         </div>
+
+        <button 
+          onClick={toggleTheme}
+          className="w-8 h-8 flex-center rounded-full hover:bg-bg-base text-text-muted hover:text-primary transition-colors"
+          title={theme === 'dark' ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}
+        >
+          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
 
         <button className="relative w-8 h-8 flex-center rounded-full hover:bg-bg-base text-text-muted hover:text-primary transition-colors">
           <Bell size={18} />

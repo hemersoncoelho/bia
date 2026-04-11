@@ -40,3 +40,9 @@ Se estiver aplicando migrations manualmente, a ordem sugerida é:
 3. `backend_invite_and_teams.sql` ou `FIX_invite_member_standalone.sql` (convite de membros)
 
 O arquivo `FIX_invite_member_standalone.sql` é autocontido e inclui tudo necessário para o convite funcionar.
+
+---
+
+## Admin aparece como "agent" / não vê tenants
+
+Execute `FIX_admin_profile.sql` — **altere o email** na linha 18 para o seu e rode no SQL Editor. Isso define `system_role = 'platform_admin'` no seu perfil. Depois faça logout e login de novo.

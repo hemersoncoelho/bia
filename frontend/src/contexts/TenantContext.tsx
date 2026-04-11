@@ -35,12 +35,23 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [impersonatedUser, setImpersonatedUser] = useState<UserProfile | null>(null);
   const [tenantLoading, setTenantLoading] = useState(true);
 
-  // On a fresh login (SIGNED_IN), always clear the stored company so the user
-  // is forced through /select-company. On page refresh (INITIAL_SESSION), the
-  // localStorage value is kept and the user lands directly on the dashboard.
+  // On a fresh login (SIGNED_IN without a stored company), always clear the stored company so
+  // the user is forced through /select-company. On page refresh (INITIAL_SESSION) or automatic
+  // token refresh (TOKEN_REFRESHED), keep the stored company — do NOT clear it.
+  // NOTE: Supabase fires SIGNED_IN on token refresh after idle, so we must guard
+  // against clearing the company when the user is just coming back to an active tab.
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN') {
+        // Only treat this as a fresh login if there is no company stored yet.
+        // If localStorage already has a company, the user just had a token refresh — keep it.
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (!stored) {
+          setCurrentCompany(null);
+          setIsSupportMode(false);
+          setImpersonatedUser(null);
+        }
+      } else if (event === 'SIGNED_OUT') {
         setCurrentCompany(null);
         setIsSupportMode(false);
         setImpersonatedUser(null);

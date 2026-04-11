@@ -490,6 +490,8 @@ const AttendanceBadge: React.FC<AttendanceBadgeProps> = ({
 interface ConversationDetailProps {
   conversation: any;
   onConversationUpdate?: () => void;
+  initialSendError?: string;
+  onInitialSendErrorDismissed?: () => void;
 }
 
 type SidebarTab = 'context' | 'notes';
@@ -497,6 +499,8 @@ type SidebarTab = 'context' | 'notes';
 export const ConversationDetail: React.FC<ConversationDetailProps> = ({
   conversation,
   onConversationUpdate,
+  initialSendError,
+  onInitialSendErrorDismissed,
 }) => {
   const { user } = useAuth();
   const { currentCompany } = useTenant();
@@ -504,6 +508,13 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [showContext, setShowContext] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('context');
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialSendError && conversation?.conversation_id) {
+      setSendError(initialSendError);
+    }
+  }, [initialSendError, conversation?.conversation_id]);
 
   // Tasks
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -549,60 +560,147 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
     fetchAgents();
   }, [fetchAgents]);
 
+  // Normaliza uma linha de mensagem do banco para o tipo Message do frontend
+  const normalizeMessage = useCallback((m: any): Message => {
+    let senderType = (m.sender_type ?? 'agent') as string;
+    // DB armazena 'user' para mensagens de agente humano
+    if (senderType === 'user') senderType = 'agent';
+    return {
+      id: String(m.public_id ?? m.id),
+      conversation_id: m.conversation_id,
+      sender_type: senderType as any,
+      sender_id: m.sender_user_id ?? m.sender_id ?? null,
+      body: m.body ?? '',
+      status: m.status ?? 'sent',
+      is_internal: m.is_internal ?? false,
+      ai_agent_id: m.ai_agent_id ?? null,
+      ai_agent_name: m.ai_agent_name ?? null,
+      created_at: m.created_at,
+      sender_name: m._sender_name ?? (m.sender_profile as any)?.full_name ?? null,
+    };
+  }, []);
+
   // Fetch messages
   useEffect(() => {
-    if (!conversation) return;
+    if (!conversation?.conversation_id) return;
+
+    const conversationId = conversation.conversation_id;
 
     const fetchMessages = async () => {
       setLoadingMessages(true);
 
-      // FK: messages.sender_user_id → profiles.user_id
+      // Evita join com profiles (pode ter RLS bloqueando)
       const { data, error } = await supabase
         .from('messages')
-        .select(`*, sender_profile:sender_user_id(full_name)`)
-        .eq('conversation_id', conversation.conversation_id)
+        .select('*')
+        .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true });
-      // Note: PostgREST resolves the FK to the "profiles" table automatically
-      // because messages.sender_user_id has a FK constraint pointing to profiles.user_id
 
       if (error) {
         console.error('[Messages] fetch error:', error);
       }
 
       if (!error && data) {
+        // Busca nomes dos remetentes via user_profiles (tabela com RLS amigável)
+        const senderIds = [...new Set(
+          data.map((m) => m.sender_user_id).filter(Boolean)
+        )];
+        let nameMap: Record<string, string> = {};
+        if (senderIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('user_profiles')
+            .select('id, full_name')
+            .in('id', senderIds);
+          if (profiles) {
+            nameMap = Object.fromEntries(profiles.map((p) => [p.id, p.full_name]));
+          }
+        }
         setMessages(
-          data.map((m) => {
-            // Normalise sender_type: the DB may use 'user' for agent messages
-            let senderType = m.sender_type as string;
-            if (senderType === 'user') senderType = 'agent';
-
-            return {
-              id: String(m.public_id ?? m.id),
-              conversation_id: m.conversation_id,
-              sender_type: senderType as any,
-              sender_id: m.sender_user_id ?? m.sender_id,
-              body: m.body ?? '',
-              status: m.status ?? 'sent',
-              is_internal: m.is_internal ?? false,
-              ai_agent_id: m.ai_agent_id,
-              ai_agent_name: m.ai_agent_name ?? null,
-              created_at: m.created_at,
-              sender_name: (m.sender_profile as any)?.full_name,
-            };
-          })
+          data.map((m) => normalizeMessage({ ...m, _sender_name: nameMap[m.sender_user_id] ?? null }))
         );
       }
       setLoadingMessages(false);
 
       if (conversation.unread_count > 0) {
         await supabase.rpc('rpc_mark_conversation_read', {
-          p_conversation_id: conversation.conversation_id,
+          p_conversation_id: conversationId,
         });
         if (onConversationUpdate) onConversationUpdate();
       }
     };
 
     fetchMessages();
+
+    // Realtime: escuta novas mensagens na conversa (inbound do contato)
+    const channel = supabase
+      .channel(`messages-conv-${conversationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        async (payload) => {
+          const newMsg = payload.new as any;
+          // Busca o nome do remetente se for mensagem de agente
+          if (newMsg.sender_user_id) {
+            const { data: profile } = await supabase
+              .from('user_profiles')
+              .select('full_name')
+              .eq('id', newMsg.sender_user_id)
+              .single();
+            if (profile) newMsg._sender_name = profile.full_name;
+          }
+          const normalized = normalizeMessage(newMsg);
+          setMessages((prev) => {
+            // Evita duplicata: se já existe mensagem com mesmo id real, ignora
+            const realId = String(newMsg.public_id ?? newMsg.id);
+            const hasDuplicate = prev.some(
+              (m) => m.id === realId && !m.id.startsWith('temp-')
+            );
+            if (hasDuplicate) return prev;
+            // Substitui mensagem temporária se existir (mesmo body + sender_id)
+            const tempIdx = prev.findIndex(
+              (m) =>
+                m.id.startsWith('temp-') &&
+                m.body === newMsg.body &&
+                m.sender_id === newMsg.sender_user_id
+            );
+            if (tempIdx >= 0) {
+              const next = [...prev];
+              next[tempIdx] = normalized;
+              return next;
+            }
+            return [...prev, normalized];
+          });
+          if (onConversationUpdate) onConversationUpdate();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          const updated = payload.new as any;
+          const updatedId = String(updated.public_id ?? updated.id);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === updatedId ? { ...m, status: updated.status ?? m.status } : m
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [conversation?.conversation_id]);
 
   // Fetch tasks
@@ -647,6 +745,7 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
   const handleSendMessage = async (body: string, isInternal: boolean) => {
     if (!user || !conversation) return;
 
+    setSendError(null);
     const tempId = `temp-${Date.now()}`;
     const newMsg: Message = {
       id: tempId,
@@ -654,7 +753,6 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
       sender_type: 'agent',
       sender_id: user.id,
       body,
-      // 'queued' mostra indicador de loading na Timeline até confirmar
       status: isInternal ? 'sent' : 'queued',
       is_internal: isInternal,
       created_at: new Date().toISOString(),
@@ -663,7 +761,7 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
 
     setMessages((prev) => [...prev, newMsg]);
 
-    // Passo 1 — gravar no banco
+    // Passo 1 — gravar no banco via RPC
     const { error: rpcError, data: rpcData } = await supabase.rpc('rpc_enqueue_outbound_message', {
       p_conversation_id: conversation.conversation_id,
       p_body: body,
@@ -672,22 +770,42 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
     });
 
     if (rpcError || !rpcData?.success) {
+      console.error('[rpc_enqueue] error:', rpcError?.message ?? rpcData?.error);
       setMessages((prev) =>
         prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m))
       );
       return;
     }
 
+    // ── Atualiza o id temporário para o id real do banco (public_id)
+    // Isso impede que o listener Realtime crie uma entrada duplicada:
+    // quando o INSERT chegar via Realtime, o id real já estará na lista.
+    const realId = rpcData.public_id
+      ? String(rpcData.public_id)
+      : rpcData.message_id != null
+        ? String(rpcData.message_id)
+        : tempId;
+
+    if (realId !== tempId) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempId ? { ...m, id: realId } : m))
+      );
+    }
+
     // Notas internas não vão para o WhatsApp
     if (isInternal) {
       setMessages((prev) =>
-        prev.map((m) => (m.id === tempId ? { ...m, status: 'sent' } : m))
+        prev.map((m) => (m.id === realId ? { ...m, status: 'sent' } : m))
       );
       if (onConversationUpdate) onConversationUpdate();
       return;
     }
 
     // Passo 2 — despachar via UAZAPI (nunca expõe token no cliente)
+    // message_id é BIGINT retornado como string em JSON — garantir que vai como number
+    const msgId = rpcData.message_id != null ? Number(rpcData.message_id) : null;
+
+    const { data: { session } } = await supabase.auth.getSession();
     const { error: dispatchError, data: dispatchData } = await supabase.functions.invoke<{
       success: boolean;
       error?: string;
@@ -695,20 +813,24 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
     }>('send-whatsapp-message', {
       body: {
         conversation_id: conversation.conversation_id,
-        message_id: rpcData.message_id,
+        message_id: msgId,
         body,
       },
+      headers: session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : undefined,
     });
 
     if (dispatchError || !dispatchData?.success) {
-      const errMsg = dispatchData?.error || dispatchError?.message || 'Falha ao enviar mensagem.';
+      const errMsg = dispatchData?.error || dispatchError?.message || 'Falha ao enviar no WhatsApp.';
       console.warn('[send-whatsapp-message]', errMsg);
+      setSendError(errMsg);
       setMessages((prev) =>
-        prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m))
+        prev.map((m) => (m.id === realId ? { ...m, status: 'failed' } : m))
       );
     } else {
       setMessages((prev) =>
-        prev.map((m) => (m.id === tempId ? { ...m, status: 'sent' } : m))
+        prev.map((m) => (m.id === realId ? { ...m, status: 'sent' } : m))
       );
       if (onConversationUpdate) onConversationUpdate();
     }
@@ -994,6 +1116,21 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
           contactName={conversation.contact_name}
           loading={loadingMessages}
         />
+        {sendError && (
+          <div className="shrink-0 mx-4 mb-2 px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center justify-between gap-2">
+            <span>{sendError}</span>
+            <button
+              onClick={() => {
+                setSendError(null);
+                onInitialSendErrorDismissed?.();
+              }}
+              className="text-rose-500 hover:text-rose-300 transition-colors shrink-0"
+              aria-label="Fechar"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
         <Composer onSendMessage={handleSendMessage} disabled={isClosed} />
 
         {/* Discrete sidebar toggle — sits on the right border, vertically centered */}

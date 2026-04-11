@@ -25,8 +25,16 @@ export const Inbox: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [initialSendError, setInitialSendError] = useState<{ conversationId: string; error: string } | null>(null);
 
   const activeId = routeConversationId && routeConversationId.length > 0 ? routeConversationId : null;
+
+  // Limpa initialSendError ao trocar de conversa
+  useEffect(() => {
+    if (activeId && initialSendError && activeId !== initialSendError.conversationId) {
+      setInitialSendError(null);
+    }
+  }, [activeId, initialSendError]);
 
   const fetchInbox = useCallback(async () => {
     if (!currentCompany) return;
@@ -56,10 +64,11 @@ export const Inbox: React.FC = () => {
       .on(
         'postgres_changes',
         {
+          // Escuta qualquer INSERT em messages — tanto inbound (contact)
+          // quanto outbound (user/agent) — para manter o preview lateral atualizado
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
-          filter: `sender_type=eq.contact`,
         },
         () => { fetchInbox(); }
       )
@@ -95,8 +104,11 @@ export const Inbox: React.FC = () => {
 
   const handleSelectConversation = (id: string) => { navigate(`/inbox/${id}`, { preventScrollReset: true }); };
 
-  const handleNewConversationSuccess = async (conversationId: string) => {
+  const handleNewConversationSuccess = async (conversationId: string, sendError?: string) => {
     await fetchInbox();
+    if (sendError) {
+      setInitialSendError({ conversationId, error: sendError });
+    }
     navigate(`/inbox/${conversationId}`);
   };
 
@@ -122,6 +134,12 @@ export const Inbox: React.FC = () => {
       <ConversationDetail 
         conversation={activeConversation}
         onConversationUpdate={fetchInbox}
+        initialSendError={
+          activeId && initialSendError?.conversationId === activeId
+            ? initialSendError.error
+            : undefined
+        }
+        onInitialSendErrorDismissed={() => setInitialSendError(null)}
       />
 
       <NewConversationModal 
