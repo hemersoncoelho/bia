@@ -282,7 +282,7 @@ const StatCard: React.FC<{
 
   return (
     <div
-      className="card-animate rounded-2xl border border-white/[0.06] bg-white/[0.025] hover:scale-[1.02] hover:border-white/[0.12] hover:bg-white/[0.04] transition-all duration-200 p-5 flex flex-col gap-3 group cursor-default"
+      className="card-animate rounded-2xl border border-white/[0.06] bg-white/[0.025] hover:scale-[1.02] hover:border-white/[0.12] hover:bg-white/[0.04] transition-all duration-200 p-4 sm:p-5 flex flex-col gap-3 group cursor-default"
       style={{ animationDelay: `${delay}ms` }}
     >
       <div className="flex items-start justify-between gap-2">
@@ -293,7 +293,7 @@ const StatCard: React.FC<{
         <div className={`p-2 rounded-xl shrink-0 ${accent} ${iconBg} transition-all duration-200 group-hover:scale-110`}>{icon}</div>
       </div>
       <div>
-        <p className={`text-4xl font-bold leading-none tabular-nums ${valueColor}`}>
+        <p className={`text-3xl sm:text-4xl font-bold leading-none tabular-nums ${valueColor}`}>
           {typeof value === 'number' ? animated.toLocaleString('pt-BR') : value}
         </p>
         {trend && (
@@ -449,9 +449,9 @@ const FunnelRow: React.FC<{
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1.5 gap-2">
           <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">{name}</span>
-          <div className="flex items-center gap-3 shrink-0">
-            <span className="text-[10px] text-zinc-400 dark:text-zinc-600 font-mono">{openDeals} abertos</span>
-            <span className={`text-[10px] font-mono font-semibold ${rateColor}`}>{convRate}% conv.</span>
+          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+            <span className="text-[10px] text-zinc-400 dark:text-zinc-600 font-mono hidden sm:inline">{openDeals} abertos</span>
+            <span className={`text-[10px] font-mono font-semibold ${rateColor}`}>{convRate}%</span>
             <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">{fmtShort(openAmount)}</span>
           </div>
         </div>
@@ -507,8 +507,8 @@ const AgentRow: React.FC<{
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1.5 gap-2">
           <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">{name}</span>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-[10px] text-zinc-400 dark:text-zinc-600 font-mono">{dealsWon}/{dealsTotal}</span>
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <span className="text-[10px] text-zinc-400 dark:text-zinc-600 font-mono hidden sm:inline">{dealsWon}/{dealsTotal}</span>
             <span className={`text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-full border ${rateColor} border-current/20 bg-current/5`}>
               {winRate}%
             </span>
@@ -912,9 +912,9 @@ export const Dashboard: React.FC = () => {
           <span className="text-[10px] font-mono uppercase tracking-widest text-orange-500 dark:text-orange-400 block mb-1.5">
             Visão Comercial
           </span>
-          <h1 className="text-3xl font-black tracking-tight text-zinc-900 dark:text-white flex items-baseline gap-3">
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-zinc-900 dark:text-white flex items-baseline gap-2 sm:gap-3 flex-wrap">
             Dashboard
-            <span className="text-zinc-400 dark:text-zinc-500 text-xl font-normal">{currentCompany.name}</span>
+            <span className="text-zinc-400 dark:text-zinc-500 text-base sm:text-xl font-normal">{currentCompany.name}</span>
           </h1>
         </div>
         <PeriodFilter value={period} onChange={handlePeriodChange} />
@@ -962,7 +962,7 @@ export const Dashboard: React.FC = () => {
             ) : (
               <>
                 <p
-                  className="text-6xl font-black tracking-tight text-white tabular-nums leading-none"
+                  className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white tabular-nums leading-none"
                   style={{ filter: 'drop-shadow(0 0 32px rgba(34,211,238,0.35)) drop-shadow(0 0 12px rgba(34,211,238,0.2))' }}
                 >
                   {fmtShort(animatedPipeline)}

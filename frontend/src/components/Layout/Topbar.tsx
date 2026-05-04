@@ -17,7 +17,7 @@ export const Topbar: React.FC = () => {
   };
 
   return (
-    <header className="h-16 bg-surface border-b border-border flex items-center justify-between px-6 z-10 sticky top-0 shrink-0">
+    <header className="h-14 sm:h-16 bg-surface border-b border-border flex items-center justify-between px-3 sm:px-6 z-10 sticky top-0 shrink-0">
       
       {/* Left: Context / Title */}
       <div className="flex flex-col">
@@ -34,18 +34,18 @@ export const Topbar: React.FC = () => {
       </div>
 
       {/* Right: Actions & User Menu */}
-      <div className="flex items-center gap-4">
-        {/* Search */}
+      <div className="flex items-center gap-2 sm:gap-4">
+        {/* Search — hidden on mobile and small tablets */}
         <div className="relative group hidden md:block">
           <Search className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2 group-focus-within:text-primary transition-colors" />
-          <input 
-            type="text" 
-            placeholder="Buscar atalhos..." 
+          <input
+            type="text"
+            placeholder="Buscar atalhos..."
             className="bg-bg-base border border-border rounded-full py-1.5 pl-9 pr-4 text-sm w-48 focus:w-64 transition-all duration-300 outline-none text-text-primary placeholder:text-text-muted/50 focus:border-border-hover/50"
           />
         </div>
 
-        <button 
+        <button
           onClick={toggleTheme}
           className="w-8 h-8 flex-center rounded-full hover:bg-bg-base text-text-muted hover:text-primary transition-colors"
           title={theme === 'dark' ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}
@@ -58,14 +58,17 @@ export const Topbar: React.FC = () => {
           <span className="absolute top-1 right-1 w-2 h-2 bg-accent-blue rounded-full border border-surface shadow-[0_0_8px_rgba(43,116,255,0.6)]"></span>
         </button>
 
-        <button className="w-8 h-8 flex-center rounded-full hover:bg-bg-base text-text-muted hover:text-primary transition-colors">
+        {/* Settings — hidden on small screens */}
+        <button className="hidden sm:flex-center w-8 h-8 rounded-full hover:bg-bg-base text-text-muted hover:text-primary transition-colors">
           <Settings size={18} />
         </button>
 
-        <div className="h-6 w-px bg-border"></div>
+        {/* Separator — hidden on small screens */}
+        <div className="h-6 w-px bg-border hidden sm:block"></div>
 
-        <div className="flex items-center gap-3 group cursor-pointer">
-          <div className="flex flex-col items-end">
+        <div className="flex items-center gap-2 sm:gap-3 group cursor-pointer">
+          {/* Name + role — hidden on mobile */}
+          <div className="hidden sm:flex flex-col items-end">
             <span className="text-sm font-medium text-primary leading-tight">
               {effectiveUser?.full_name}
             </span>
@@ -73,22 +76,22 @@ export const Topbar: React.FC = () => {
               {effectiveUser?.role.replace('_', ' ') || 'agent'}
             </span>
           </div>
-          
-          <div className="w-9 h-9 rounded-full bg-surface border border-border flex-center relative overflow-hidden group-hover:border-primary/50 transition-colors">
+
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-surface border border-border flex-center relative overflow-hidden group-hover:border-primary/50 transition-colors">
             {effectiveUser?.avatar_url ? (
               <img src={effectiveUser.avatar_url} alt="avatar" className="w-full h-full object-cover" />
             ) : (
               <User size={16} className="text-text-muted group-hover:text-primary transition-colors" />
             )}
           </div>
-          
-          <ChevronDown size={14} className="text-text-muted group-hover:text-primary transition-colors" />
+
+          {/* Chevron — hidden on mobile */}
+          <ChevronDown size={14} className="hidden sm:block text-text-muted group-hover:text-primary transition-colors" />
         </div>
 
-        {/* Temporary explicit logout for testing */}
-        <button 
+        <button
           onClick={handleLogout}
-          className="ml-2 w-8 h-8 flex-center rounded border border-border hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/50 text-text-muted transition-colors group"
+          className="w-8 h-8 flex-center rounded border border-border hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/50 text-text-muted transition-colors group"
           title="Sair do sistema"
         >
           <LogOut size={16} className="group-hover:scale-110 transition-transform" />

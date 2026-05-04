@@ -24,6 +24,9 @@ npm run lint      # Verificação com ESLint
 npm run preview   # Preview do build de produção localmente
 ```
 
+> ⚠️ **Peer conflict Vite 8:** `@tailwindcss/vite` declara peer `vite@^5||^6||^7` mas o projeto usa Vite 8.
+> Sempre instale dependências com `npm install --legacy-peer-deps` em `frontend/`.
+
 Sem suite de testes — o projeto usa testes manuais e checklists de auditoria (`AUDITORIA_*.md`).
 
 ## Arquitetura
@@ -73,9 +76,11 @@ Use classes CSS Tailwind baseadas em variáveis (`bg-background`, `text-primary`
 Arquivos `.sql` em `frontend/supabase-migrations/` — aplicados manualmente via Supabase Dashboard (SQL Editor) ou `supabase db push`. Não existe pipeline de migração automatizado.
 
 ### Backoffice Admin
-Seção `/admin` acessível apenas para `system_admin` e `platform_admin`. Usa `AdminShell` separado do `AppShell` principal. Páginas: CompaniesList, CompanyDetails, UsersList, SupportPanel.
+Seção `/admin` acessível apenas para `system_admin` e `platform_admin`. Usa `AdminShell` separado do `AppShell` principal. Páginas: CompaniesList, CompanyDetails, UsersList, ModulesList, SupportPanel.
 
 O `UsersList` inclui modal de criação de usuário que chama a Edge Function `create-platform-user` — exige vínculo com uma empresa obrigatoriamente.
+
+`CompaniesList` exibe métricas de cada tenant (plano de assinatura, status, MRR acumulado) e permite gestão de `company_subscriptions`. `CompanyDetails` inclui painel de assinatura com troca de plano, histórico de status e ações de churn/suspensão.
 
 ### Compatibilidade Vite/OXC
 O Vite 8 usa o parser OXC que é mais restrito que o `tsc`:
@@ -116,11 +121,16 @@ Localizadas em `supabase/functions/`. Cada função:
 | `rpc_save_ai_agent` | Upsert de configuração do agente de IA (nome, model, system_prompt, scope) |
 | `rpc_toggle_ai_agent` | Ativa/desativa agente de IA |
 | `rpc_invite_member` | Convida usuário para empresa com papel definido |
-| `rpc_save_ai_message` | Persiste resposta da IA no Inbox após envio via UAZAPI (chamado pelo n8n) |
-| `rpc_save_human_message` | Persiste mensagem de agente humano enviada via n8n/UAZAPI (`sender_type='user'`) |
+| `rpc_save_ai_message` | Persiste resposta da IA no Inbox após envio via UAZAPI — **apenas service_role** |
+| `rpc_save_human_message` | Persiste mensagem de agente humano enviada via n8n/UAZAPI — **apenas service_role** |
 | `rpc_resolve_company_by_token` | Resolve `company_id` a partir do `instance_token` da integração UAZAPI (SECURITY DEFINER, usado pelo n8n sem JWT) |
 | `rpc_get_active_ai_agent` | Retorna config do agente de IA ativo por `company_id` (SECURITY DEFINER, usado pelo n8n) |
-| `rpc_get_company_integration` | Retorna `instance_id` e `instance_token` da integração UAZAPI ativa da empresa (SECURITY DEFINER) |
+| `rpc_get_company_integration` | Retorna `instance_id` e `instance_token` da integração UAZAPI ativa da empresa — **apenas service_role** |
+| `rpc_get_available_slots` | Retorna slots livres para um serviço em uma data (SECURITY DEFINER) |
+| `rpc_create_appointment` | Cria novo agendamento com validação de conflito (SECURITY DEFINER) |
+| `rpc_cancel_appointment` | Cancela agendamento com `cancellation_reason` (SECURITY DEFINER) |
+| `rpc_reschedule_appointment` | Remarca agendamento criando novo e linkando via `rescheduled_from_id` (SECURITY DEFINER) |
+| `rpc_update_appointment_status` | Atualiza `status` de um agendamento com validação de tenant (SECURITY DEFINER) |
 
 ### Principais Tabelas do Banco
 | Tabela | Propósito |
@@ -139,6 +149,11 @@ Localizadas em `supabase/functions/`. Cada função:
 | `ai_agent_bindings` | Vincula agentes de IA a canais ou conversas específicas |
 | `audit_logs` | Trilha de auditoria imutável |
 | `kpi_company_daily_snapshots` | Snapshots diários de KPIs para analytics |
+| `schedules` | Horário de funcionamento por empresa e dia da semana (`company_id`, `weekday` 0–6, `opens_at`, `closes_at`, `is_active`) |
+| `service_types` | Tipos de serviço/procedimento por empresa (`name`, `duration_minutes`, `is_active`) |
+| `appointments` | Agendamentos do módulo Agenda (`scheduled_at`, `ends_at`, `status`, `rescheduled_from_id`) |
+| `subscription_plans` | Catálogo de planos de assinatura da plataforma (`name`, `price_monthly`, `is_active`) |
+| `company_subscriptions` | Plano ativo por tenant (`plan_id`, `status`: trial/active/churned/suspended, `trial_ends_at`, `churn_reason`) |
 
 ### Storage
 Bucket `media` no Supabase Storage para mídias do WhatsApp (áudio, imagem, vídeo, documento, sticker):
@@ -218,6 +233,19 @@ VITE_SUPABASE_ANON_KEY=
 
 Edge Functions usam `UAZAPI_BASE_URL`, `UAZAPI_ADMIN_TOKEN` e `SUPABASE_SERVICE_ROLE_KEY` definidos como secrets do Supabase (não no `.env`).
 
+## Segurança — Migrações Aplicadas
+
+As migrações em `frontend/supabase-migrations/SECURITY_0*.sql` corrigiram vulnerabilidades críticas:
+
+| Arquivo | Fix |
+|---------|-----|
+| `SECURITY_01_revoke_anon_from_rpcs.sql` | Revoga `EXECUTE` de `anon` em `rpc_save_ai_message`, `rpc_save_human_message` e `rpc_get_company_integration`; adiciona verificação interna de `service_role` como defesa em profundidade |
+| `SECURITY_02_channel_events_raw_rls.sql` | Habilita RLS em `channel_events_raw`; `anon` não pode mais ler eventos brutos |
+| `SECURITY_03_fix_ai_agents_rls.sql` | Corrige políticas em `ai_agents` para isolar configs por tenant |
+| `SECURITY_04_fix_audit_logs_rls.sql` | Restringe leitura de `audit_logs` apenas ao `company_admin` da empresa |
+
+**Impacto no n8n:** após aplicar `SECURITY_01`, todos os nodes que chamam `rpc_save_ai_message`, `rpc_save_human_message` e `rpc_get_company_integration` devem usar credencial **service_role key** (não mais anon key). Ver instruções completas no final do arquivo SQL.
+
 ## Problemas Conhecidos
 1. `NewConversationModal` passa `user.id` como `p_agent_id` — deve passar `null` ou um ID de agente válido
 
@@ -284,6 +312,61 @@ Componente separado em `frontend/src/components/Dashboard/PeriodFilter.tsx`:
 - Tipos: `'today' | '7d' | '30d' | '90d'`
 - Exporta `periodToStartDate(period): string` — retorna ISO datetime do início do período
 - Filtro "Este Mês" (`30d`) usa início do mês corrente, não exatamente 30 dias atrás
+
+## Módulo: Agenda
+
+Módulo de agendamentos disponível para todos os membros da empresa. Rotas: `/agenda` e `/agenda/configuracoes`.
+
+### Páginas
+
+| Página | Arquivo | Propósito |
+|--------|---------|-----------|
+| `AgendaPage` | `frontend/src/pages/Agenda.tsx` | Lista, calendário semanal e mensal de agendamentos com criação/cancelamento/remarcação inline |
+| `AgendaSettings` | `frontend/src/pages/AgendaSettings.tsx` | Configuração de horários de funcionamento por dia da semana e gerenciamento de tipos de serviço |
+
+### Componentes internos (Agenda.tsx)
+
+| Componente | Propósito |
+|------------|-----------|
+| `SlotsPicker` | Busca e exibe slots disponíveis via `rpc_get_available_slots` para a data e serviço selecionados |
+| `ContactSearch` | Input de busca de contato com debounce e dropdown |
+| `Toast` | Feedback de sucesso/erro com auto-dismiss em 3,5s |
+| `Av` | Avatar colorido baseado no hash do nome (paleta determinística) |
+
+### Modos de visualização (Agenda)
+- **Lista** — todos os agendamentos com filtro por status e busca textual
+- **Semana** — grade de 7 colunas (Dom–Sáb) com blocos posicionados por horário (7h–21h)
+- **Mês** — grid mensal com indicadores de agendamentos por dia
+
+### Status de agendamento
+```
+scheduled → completed
+scheduled → cancelled   (requer cancellation_reason)
+scheduled → rescheduled (cria novo appointment, linkado via rescheduled_from_id)
+```
+
+### Tabelas usadas pelo módulo Agenda
+- `schedules` — leitura/escrita via `AgendaSettings`
+- `service_types` — CRUD completo via `AgendaSettings`
+- `appointments` — leitura/escrita via `AgendaPage`
+
+### RPCs da Agenda
+Todas são `SECURITY DEFINER` e retornam `{ success: bool, error?: text, ... }`:
+- `rpc_get_available_slots(p_company_id, p_service_type_id, p_date)` — retorna `{ slots: [{slot_start, slot_end}] }`
+- `rpc_create_appointment(p_company_id, p_contact_id, p_service_type_id, p_scheduled_at, p_notes?)` — cria agendamento e retorna `appointment_id`
+- `rpc_cancel_appointment(p_company_id, p_appointment_id, p_reason?)` — cancela
+- `rpc_reschedule_appointment(p_company_id, p_appointment_id, p_new_scheduled_at)` — remarca
+- `rpc_update_appointment_status(p_company_id, p_appointment_id, p_new_status, p_reason?)` — atualiza status com validação de tenant
+
+## AuthContext — Comportamento de Carregamento
+
+O `AuthContext` usa `onAuthStateChange` como **única** fonte de eventos de sessão (não chama `getSession()` separadamente — evita race condition com React StrictMode double-mount).
+
+**Retry com backoff exponencial:** se o fetch do perfil falhar por timeout (8s) ou erro transiente, tenta novamente 3 vezes com delays de 2s, 4s e 8s. Após 3 tentativas sem sucesso, redireciona para `/login`.
+
+**Geração de fetch (`fetchGenRef`):** evita que um fetch lento e cancelado aplique seu resultado após um fetch mais novo já ter resolvido (proteção contra race conditions no React StrictMode).
+
+**Eventos ignorados:** `TOKEN_REFRESHED` e `SIGNED_IN` são ignorados se `profileLoadedRef.current === true` — evita loop de timeout a cada rotação de token.
 
 ## Convenções de Commit
 Commits seguem os prefixos `feat:`, `fix:`, `refactor:`. Mensagens de commit são escritas em português.

@@ -25,15 +25,6 @@ const PROVIDERS: { value: AiAgentProvider; label: string; models: string[] }[] =
   },
 ];
 
-const CHANNELS = [
-  { value: 'whatsapp', label: 'WhatsApp' },
-  { value: 'email', label: 'E-mail' },
-  { value: 'sms', label: 'SMS' },
-  { value: 'webchat', label: 'Webchat' },
-  { value: 'instagram', label: 'Instagram' },
-  { value: 'telegram', label: 'Telegram' },
-];
-
 export interface AgentFormData {
   name: string;
   description: string;
@@ -49,10 +40,12 @@ export interface AgentFormData {
 interface AgentFormProps {
   initial?: Partial<AiAgent>;
   onSave: (data: AgentFormData) => Promise<void>;
+  onChange?: (data: AgentFormData) => void;
   saving: boolean;
+  toolsSlot?: React.ReactNode;
 }
 
-export const AgentForm: React.FC<AgentFormProps> = ({ initial, onSave, saving }) => {
+export const AgentForm: React.FC<AgentFormProps> = ({ initial, onSave, onChange, saving, toolsSlot }) => {
   const [form, setForm] = useState<AgentFormData>({
     name: initial?.name ?? '',
     description: initial?.description ?? '',
@@ -69,33 +62,30 @@ export const AgentForm: React.FC<AgentFormProps> = ({ initial, onSave, saving })
 
   const selectedProvider = PROVIDERS.find((p) => p.value === form.provider)!;
 
+  const updateForm = (updater: (current: AgentFormData) => AgentFormData) => {
+    setForm((current) => {
+      const next = updater(current);
+      onChange?.(next);
+      return next;
+    });
+  };
+
   useEffect(() => {
     if (initial?.provider && initial?.model) return;
     const defaultModel = selectedProvider?.models[0] ?? '';
-    setForm((f) => ({ ...f, model: defaultModel }));
+    updateForm((f) => ({ ...f, model: defaultModel }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.provider]);
-
-  const toggleChannel = (ch: string) => {
-    setForm((f) => ({
-      ...f,
-      scope: {
-        ...f.scope,
-        channels: f.scope.channels.includes(ch)
-          ? f.scope.channels.filter((c) => c !== ch)
-          : [...f.scope.channels, ch],
-      },
-    }));
-  };
 
   const addKeyword = () => {
     const kw = keywordInput.trim().toLowerCase();
     if (!kw || form.handoff_keywords.includes(kw)) return;
-    setForm((f) => ({ ...f, handoff_keywords: [...f.handoff_keywords, kw] }));
+    updateForm((f) => ({ ...f, handoff_keywords: [...f.handoff_keywords, kw] }));
     setKeywordInput('');
   };
 
   const removeKeyword = (kw: string) => {
-    setForm((f) => ({
+    updateForm((f) => ({
       ...f,
       handoff_keywords: f.handoff_keywords.filter((k) => k !== kw),
     }));
@@ -112,7 +102,13 @@ export const AgentForm: React.FC<AgentFormProps> = ({ initial, onSave, saving })
       return;
     }
     setError('');
-    await onSave(form);
+    await onSave({
+      ...form,
+      scope: {
+        ...form.scope,
+        channels: ['whatsapp'],
+      },
+    });
   };
 
   const inputClass =
@@ -141,7 +137,7 @@ export const AgentForm: React.FC<AgentFormProps> = ({ initial, onSave, saving })
             className={inputClass}
             placeholder="Ex: Suporte Técnico, SDR Qualificador..."
             value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            onChange={(e) => updateForm((f) => ({ ...f, name: e.target.value }))}
           />
         </div>
 
@@ -151,7 +147,7 @@ export const AgentForm: React.FC<AgentFormProps> = ({ initial, onSave, saving })
             className={inputClass}
             placeholder="Finalidade e contexto de uso deste agente"
             value={form.description}
-            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+            onChange={(e) => updateForm((f) => ({ ...f, description: e.target.value }))}
           />
         </div>
       </section>
@@ -169,7 +165,7 @@ export const AgentForm: React.FC<AgentFormProps> = ({ initial, onSave, saving })
               className={inputClass}
               value={form.provider}
               onChange={(e) =>
-                setForm((f) => ({ ...f, provider: e.target.value as AiAgentProvider }))
+                updateForm((f) => ({ ...f, provider: e.target.value as AiAgentProvider }))
               }
             >
               {PROVIDERS.map((p) => (
@@ -186,7 +182,7 @@ export const AgentForm: React.FC<AgentFormProps> = ({ initial, onSave, saving })
               <select
                 className={inputClass}
                 value={form.model}
-                onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
+                onChange={(e) => updateForm((f) => ({ ...f, model: e.target.value }))}
               >
                 {selectedProvider.models.map((m) => (
                   <option key={m} value={m}>
@@ -199,7 +195,7 @@ export const AgentForm: React.FC<AgentFormProps> = ({ initial, onSave, saving })
                 className={inputClass}
                 placeholder="nome-do-modelo"
                 value={form.model}
-                onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
+                onChange={(e) => updateForm((f) => ({ ...f, model: e.target.value }))}
               />
             )}
           </div>
@@ -226,71 +222,48 @@ Regras:
 - Se não souber responder, transfira para um humano
 - Idioma: português brasileiro`}
           value={form.system_prompt}
-          onChange={(e) => setForm((f) => ({ ...f, system_prompt: e.target.value }))}
+          onChange={(e) => updateForm((f) => ({ ...f, system_prompt: e.target.value }))}
         />
       </section>
 
-      {/* Scope */}
+      {/* Behavior */}
       <section className="space-y-4">
-        <h3 className="text-xs font-bold text-stone-500 uppercase tracking-widest">
-          Escopo de Atuação
-        </h3>
-
         <div>
-          <label className={labelClass}>Canais</label>
-          <p className="text-[11px] text-stone-600 mb-2">
-            Selecione os canais onde este agente irá atuar. Sem seleção = todos os canais.
+          <h3 className="text-xs font-bold text-stone-500 uppercase tracking-widest">
+            Comportamento
+          </h3>
+          <p className="text-[11px] text-stone-600 mt-1">
+            Atuando no WhatsApp. Configure resposta automática e regras de handoff humano.
           </p>
-          <div className="flex flex-wrap gap-2">
-            {CHANNELS.map((ch) => {
-              const active = form.scope.channels.includes(ch.value);
-              return (
-                <button
-                  key={ch.value}
-                  type="button"
-                  onClick={() => toggleChannel(ch.value)}
-                  className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-all ${
-                    active
-                      ? 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30'
-                      : 'bg-background text-stone-500 border-border hover:border-stone-600 hover:text-stone-300'
-                  }`}
-                >
-                  {ch.label}
-                </button>
-              );
-            })}
-          </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-3 p-4 bg-surface border border-border rounded-xl">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-stone-300">WhatsApp</span>
+              <span className="text-[10px] font-medium uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5">
+                Canal ativo
+              </span>
+            </div>
+            <p className="text-[11px] text-stone-600 mt-1">
+              Resposta automática para conversas recebidas no WhatsApp.
+            </p>
+          </div>
           <label className="relative inline-flex items-center cursor-pointer">
             <input
               type="checkbox"
               checked={form.scope.auto_reply}
               onChange={(e) =>
-                setForm((f) => ({
+                updateForm((f) => ({
                   ...f,
-                  scope: { ...f.scope, auto_reply: e.target.checked },
+                  scope: { ...f.scope, channels: ['whatsapp'], auto_reply: e.target.checked },
                 }))
               }
               className="sr-only peer"
             />
             <div className="w-9 h-5 bg-stone-700 peer-focus:ring-2 peer-focus:ring-indigo-500/30 rounded-full peer peer-checked:bg-indigo-600 transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
           </label>
-          <div>
-            <span className="text-sm font-medium text-stone-300">Resposta Automática</span>
-            <p className="text-[11px] text-stone-600">
-              O agente responde automaticamente novas conversas no canal selecionado
-            </p>
-          </div>
         </div>
-      </section>
-
-      {/* Handoff */}
-      <section className="space-y-4">
-        <h3 className="text-xs font-bold text-stone-500 uppercase tracking-widest">
-          Handoff para Humano
-        </h3>
 
         <div>
           <label className={labelClass}>Palavras-chave de Transferência</label>
@@ -348,45 +321,73 @@ Regras:
             placeholder="Ex: 10 (deixe em branco para desativar)"
             value={form.handoff_after_mins}
             onChange={(e) =>
-              setForm((f) => ({ ...f, handoff_after_mins: e.target.value }))
+              updateForm((f) => ({ ...f, handoff_after_mins: e.target.value }))
             }
           />
         </div>
+      </section>
+
+      {/* Tools */}
+      <section className="space-y-4 pt-2">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-xs font-bold text-stone-300 uppercase tracking-widest">
+                Ferramentas
+              </h3>
+              <span className="text-[10px] font-semibold text-indigo-400 bg-indigo-500/10 border border-indigo-500/25 rounded-full px-2 py-0.5 uppercase tracking-wider">
+                Proposta de valor
+              </span>
+            </div>
+            <p className="text-[11px] text-stone-500 leading-relaxed">
+              Configure as ações do agente antes de publicar. Ferramentas com dependências
+              pendentes aparecem sinalizadas e não são enviadas ao n8n.
+            </p>
+          </div>
+        </div>
+        {toolsSlot ?? (
+          <div className="p-5 bg-surface border border-border border-dashed rounded-xl text-center">
+            <p className="text-sm text-stone-500 mb-1">Salve o agente primeiro</p>
+            <p className="text-[11px] text-stone-600">Após salvar, as ferramentas estarão disponíveis para configuração.</p>
+          </div>
+        )}
       </section>
 
       {/* Publication */}
-      <section className="flex items-start gap-3 p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
-        <label className="relative inline-flex items-center cursor-pointer mt-0.5">
-          <input
-            type="checkbox"
-            checked={form.is_published}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, is_published: e.target.checked }))
-            }
-            className="sr-only peer"
-          />
-          <div className="w-9 h-5 bg-stone-700 peer-focus:ring-2 peer-focus:ring-amber-500/30 rounded-full peer peer-checked:bg-amber-500 transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
-        </label>
-        <div>
-          <span className="text-sm font-semibold text-amber-400">Publicar Agente</span>
-          <p className="text-[11px] text-stone-500 mt-0.5">
-            Agentes não publicados só aparecem na área de testes. Publique apenas quando estiver
-            satisfeito com o comportamento.
-          </p>
+      <section className="pt-6 border-t border-border space-y-4">
+        <div className="flex items-start gap-3 p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
+          <label className="relative inline-flex items-center cursor-pointer mt-0.5">
+            <input
+              type="checkbox"
+              checked={form.is_published}
+              onChange={(e) =>
+                updateForm((f) => ({ ...f, is_published: e.target.checked }))
+              }
+              className="sr-only peer"
+            />
+            <div className="w-9 h-5 bg-stone-700 peer-focus:ring-2 peer-focus:ring-amber-500/30 rounded-full peer peer-checked:bg-amber-500 transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4" />
+          </label>
+          <div>
+            <span className="text-sm font-semibold text-amber-400">Publicar Agente</span>
+            <p className="text-[11px] text-stone-500 mt-0.5">
+              Agentes não publicados só aparecem na área de testes. Publique apenas quando estiver
+              satisfeito com o comportamento e ferramentas habilitadas.
+            </p>
+          </div>
+        </div>
+
+        {/* Submit */}
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex items-center gap-2 px-5 py-2.5 bg-white text-black text-sm font-semibold rounded-lg hover:bg-stone-200 transition-colors disabled:opacity-50 disabled:cursor-wait"
+          >
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            {saving ? 'Salvando...' : 'Salvar Agente'}
+          </button>
         </div>
       </section>
-
-      {/* Submit */}
-      <div className="flex justify-end pt-2">
-        <button
-          type="submit"
-          disabled={saving}
-          className="flex items-center gap-2 px-5 py-2.5 bg-white text-black text-sm font-semibold rounded-lg hover:bg-stone-200 transition-colors disabled:opacity-50 disabled:cursor-wait"
-        >
-          {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-          {saving ? 'Salvando...' : 'Salvar Agente'}
-        </button>
-      </div>
     </form>
   );
 };

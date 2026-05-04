@@ -16,8 +16,9 @@ import { supabase } from '../lib/supabase';
 import { useTenant } from '../contexts/TenantContext';
 import { AgentForm } from '../components/AiAgents/AgentForm';
 import { AgentTestPanel } from '../components/AiAgents/AgentTestPanel';
+import { AgentToolGrid } from '../components/AiAgents/AgentToolGrid';
 import type { AgentFormData } from '../components/AiAgents/AgentForm';
-import type { AiAgent } from '../types';
+import type { AiAgent, ToolContext } from '../types';
 
 type TabId = 'config' | 'test';
 
@@ -40,6 +41,7 @@ export const AiAgentDetail: React.FC = () => {
   const [toggling, setToggling] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('config');
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [toolContext, setToolContext] = useState<ToolContext | null>(null);
 
   // Form state (lifted so the test panel can read it live)
   const [liveForm, setLiveForm] = useState<AgentFormData>({
@@ -108,6 +110,62 @@ export const AiAgentDetail: React.FC = () => {
   useEffect(() => {
     fetchAgent();
   }, [fetchAgent]);
+
+  const fetchToolContext = useCallback(async () => {
+    if (!currentCompany) return;
+
+    const [
+      schedulesRes,
+      serviceTypesRes,
+      pipelinesRes,
+      teamsRes,
+      teamMembersRes,
+    ] = await Promise.all([
+      supabase
+        .from('schedules')
+        .select('id', { count: 'exact', head: true })
+        .eq('company_id', currentCompany.id)
+        .eq('is_active', true),
+      supabase
+        .from('service_types')
+        .select('id', { count: 'exact', head: true })
+        .eq('company_id', currentCompany.id)
+        .eq('is_active', true),
+      supabase
+        .from('pipelines')
+        .select('id')
+        .eq('company_id', currentCompany.id),
+      supabase
+        .from('teams')
+        .select('id', { count: 'exact', head: true })
+        .eq('company_id', currentCompany.id),
+      supabase
+        .from('user_companies')
+        .select('user_id', { count: 'exact', head: true })
+        .eq('company_id', currentCompany.id),
+    ]);
+
+    const pipelineIds = (pipelinesRes.data ?? []).map((pipeline) => pipeline.id);
+    const pipelineStagesRes = pipelineIds.length > 0
+      ? await supabase
+          .from('pipeline_stages')
+          .select('id', { count: 'exact', head: true })
+          .in('pipeline_id', pipelineIds)
+      : { count: 0 };
+
+    setToolContext({
+      schedulesConfigured: (schedulesRes.count ?? 0) > 0,
+      serviceTypesConfigured: (serviceTypesRes.count ?? 0) > 0,
+      pipelineConfigured: pipelineIds.length > 0 && (pipelineStagesRes.count ?? 0) > 0,
+      teamsConfigured: (teamsRes.count ?? 0) > 0 && (teamMembersRes.count ?? 0) > 0,
+      mediaStorageConfigured: true,
+      knowledgeProviderConfigured: false,
+    });
+  }, [currentCompany]);
+
+  useEffect(() => {
+    fetchToolContext();
+  }, [fetchToolContext]);
 
   const handleSave = async (form: AgentFormData) => {
     if (!currentCompany) return;
@@ -311,14 +369,24 @@ export const AiAgentDetail: React.FC = () => {
       {/* Tab Content */}
       <div className="flex-1 overflow-hidden">
         {activeTab === 'config' ? (
-          <div className="h-full overflow-y-auto custom-scrollbar px-8 py-6 max-w-2xl">
+          <div className="h-full overflow-y-auto custom-scrollbar px-8 py-6 max-w-5xl">
             <AgentForm
               initial={agent ?? undefined}
+              onChange={setLiveForm}
               onSave={(form) => {
                 setLiveForm(form);
                 return handleSave(form);
               }}
               saving={saving}
+              toolsSlot={
+                !isNew && agent && currentCompany ? (
+                  <AgentToolGrid
+                    agentId={agent.id}
+                    companyId={currentCompany.id}
+                    context={toolContext}
+                  />
+                ) : undefined
+              }
             />
           </div>
         ) : (

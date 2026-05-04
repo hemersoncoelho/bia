@@ -45,7 +45,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   ];
 
   return (
-    <div className="w-[340px] flex flex-col h-full border-r border-border shrink-0 bg-background">
+    <div className="w-full sm:w-[340px] sm:shrink-0 flex flex-col h-full border-r border-border bg-background">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="px-5 pt-5 pb-4 border-b border-border shrink-0">

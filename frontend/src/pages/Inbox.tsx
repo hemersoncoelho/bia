@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { useTenant } from '../contexts/TenantContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useDebounce } from '../hooks/useDebounce';
@@ -110,39 +111,56 @@ export const Inbox: React.FC = () => {
   const activeConversation = conversations.find(c => c.conversation_id === activeId);
 
   return (
-    <div className="bg-background border border-border rounded-xl flex overflow-hidden shadow-lg h-[calc(100vh-140px)] min-h-[600px] reveal active">
-      
-      <ConversationList 
-        conversations={filteredConversations}
-        allConversations={conversations}
-        activeId={activeId}
-        onSelect={handleSelectConversation}
-        loading={loading}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        activeFilter={activeFilter}
-        setActiveFilter={setActiveFilter}
-        onNewConversation={() => setIsModalOpen(true)}
-        currentUserId={user?.id}
-      />
-      
-      <ConversationDetail 
-        conversation={activeConversation}
-        onConversationUpdate={fetchInbox}
-        initialSendError={
-          activeId && initialSendError?.conversationId === activeId
-            ? initialSendError.error
-            : undefined
-        }
-        onInitialSendErrorDismissed={() => setInitialSendError(null)}
-      />
+    <div className="bg-background border border-border rounded-xl flex overflow-hidden shadow-lg h-[calc(100vh-76px)] sm:h-[calc(100vh-140px)] min-h-0 reveal active">
 
-      <NewConversationModal 
+      {/* Conversation list: full width on mobile when no conversation is open */}
+      <div className={`h-full ${activeId ? 'hidden sm:flex' : 'flex'} w-full sm:w-auto`}>
+        <ConversationList
+          conversations={filteredConversations}
+          allConversations={conversations}
+          activeId={activeId}
+          onSelect={handleSelectConversation}
+          loading={loading}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          activeFilter={activeFilter}
+          setActiveFilter={setActiveFilter}
+          onNewConversation={() => setIsModalOpen(true)}
+          currentUserId={user?.id}
+        />
+      </div>
+
+      {/* Conversation detail: full width on mobile when a conversation is open */}
+      <div className={`flex-1 min-w-0 h-full flex-col ${activeId ? 'flex' : 'hidden sm:flex'}`}>
+        {/* Mobile back button — only visible on small screens when a conversation is open */}
+        {activeId && (
+          <button
+            onClick={() => navigate('/inbox')}
+            className="sm:hidden flex items-center gap-2 px-4 py-2.5 border-b border-border bg-background text-text-muted hover:text-primary text-sm shrink-0 transition-colors"
+          >
+            <ArrowLeft size={15} />
+            <span className="font-medium">Conversas</span>
+          </button>
+        )}
+        <div className="flex-1 min-w-0 overflow-hidden">
+        <ConversationDetail
+          conversation={activeConversation}
+          onConversationUpdate={fetchInbox}
+          initialSendError={
+            activeId && initialSendError?.conversationId === activeId
+              ? initialSendError.error
+              : undefined
+          }
+          onInitialSendErrorDismissed={() => setInitialSendError(null)}
+        />
+        </div>
+      </div>
+
+      <NewConversationModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={handleNewConversationSuccess}
       />
-
     </div>
   );
 };

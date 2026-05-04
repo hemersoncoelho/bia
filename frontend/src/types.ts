@@ -107,6 +107,112 @@ export interface Note {
 export type AiAgentProvider = 'openai' | 'anthropic' | 'google' | 'custom';
 export type AttendanceMode = 'human' | 'ai' | 'hybrid';
 export type AgentBindingType = 'all' | 'channel' | 'conversation';
+export type AgentToolType =
+  | 'agenda_action'
+  | 'crm_action'
+  | 'atendimento_action'
+  | 'media_action'
+  | 'knowledge_action'
+  | 'webhook_action'
+  | 'internal_action';
+
+export type ToolReadinessStatus =
+  | 'ready'
+  | 'incomplete'
+  | 'inactive'
+  | 'blocked'
+  | 'integration_missing';
+
+export interface ToolDependency {
+  key: string;
+  label: string;
+  configured: boolean;
+  configurePath?: string;
+  helpText?: string;
+}
+
+export interface ToolContext {
+  schedulesConfigured: boolean;
+  serviceTypesConfigured: boolean;
+  pipelineConfigured: boolean;
+  teamsConfigured: boolean;
+  mediaStorageConfigured: boolean;
+  knowledgeProviderConfigured: boolean;
+}
+
+// ── Campo declarativo do drawer de configuração ───────────────
+
+export type ToolFieldType =
+  | 'text'
+  | 'textarea'
+  | 'number'
+  | 'toggle'
+  | 'select'
+  | 'multiselect';
+
+export interface ToolFieldOption {
+  value: string | number | boolean;
+  label: string;
+}
+
+export interface ToolFieldDef {
+  key: string;
+  type: ToolFieldType;
+  label: string;
+  description?: string;
+  placeholder?: string;
+  required?: boolean;
+  default?: unknown;
+  options?: ToolFieldOption[];
+  min?: number;
+  max?: number;
+  rows?: number;
+}
+
+export interface AgentToolAsset {
+  id: string;
+  file_name: string;
+  public_url: string;
+  mime_type?: string;
+  label?: string;
+  sort_order: number;
+}
+
+export interface AgentToolCatalogItem {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  tool_type: AgentToolType;
+  icon: string;
+  is_built_in: boolean;
+  config_schema: Record<string, unknown>;
+  when_to_use?: string;
+  depends_on?: string[];
+  input_schema?: Record<string, unknown>;
+  sort_order: number;
+}
+
+export interface AgentToolBinding {
+  id: string;
+  company_id: string;
+  agent_id: string;
+  tool_slug: string;
+  is_enabled: boolean;
+  config: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Shape retornado por rpc_get_agent_tools — catálogo + estado do binding fundidos */
+export interface AgentTool extends AgentToolCatalogItem {
+  binding_id?: string;
+  is_enabled: boolean;
+  config: Record<string, unknown>;
+  assets?: AgentToolAsset[];
+  readiness?: ToolReadinessStatus;
+  dependencies?: ToolDependency[];
+}
 
 export interface AiAgentScope {
   channels: string[];

@@ -45,13 +45,13 @@ export const PeriodFilter: React.FC<PeriodFilterProps> = ({ value, onChange }) =
   return (
     <div className="flex items-center gap-1.5">
       <Calendar size={13} className="text-zinc-500 shrink-0" />
-      <div className="flex items-center gap-1 p-1 rounded-lg bg-zinc-100 dark:bg-white/[0.04] border border-zinc-200 dark:border-white/[0.06]">
+      <div className="flex items-center gap-0.5 sm:gap-1 p-1 rounded-lg bg-zinc-100 dark:bg-white/[0.04] border border-zinc-200 dark:border-white/[0.06]">
         {periods.map(p => (
           <button
             key={p}
             onClick={() => onChange(p)}
             className={cn(
-              'px-3 py-1 text-[11px] font-mono uppercase tracking-wider rounded-md transition-all duration-150',
+              'px-2 sm:px-3 py-1 text-[10px] sm:text-[11px] font-mono uppercase tracking-wider rounded-md transition-all duration-150',
               value === p
                 ? 'bg-white dark:bg-white/10 text-zinc-900 dark:text-white border border-zinc-200 dark:border-white/20 shadow-sm'
                 : 'text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-white/50 dark:hover:bg-white/5'

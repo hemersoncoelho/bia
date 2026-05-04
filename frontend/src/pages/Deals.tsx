@@ -192,7 +192,7 @@ export const Deals: React.FC = () => {
   }).format(totalValue);
 
   return (
-    <div className="flex flex-col reveal active" style={{ height: 'calc(100vh - 112px)' }}>
+    <div className="flex flex-col reveal active h-[calc(100vh-76px)] sm:h-[calc(100vh-112px)]">
 
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between border-b border-border pb-5 mb-5 gap-4 shrink-0">
