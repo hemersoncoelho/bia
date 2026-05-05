@@ -21,12 +21,6 @@ const BUCKET = 'media';
 const isImage = (mime?: string) => mime?.startsWith('image/') ?? false;
 const isVideo = (mime?: string) => mime?.startsWith('video/') ?? false;
 
-const formatBytes = (bytes: number) => {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-};
-
 // ── Tipos internos ────────────────────────────────────────────
 
 interface UploadingFile {

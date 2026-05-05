@@ -70,7 +70,6 @@ const getDependsOn = (schema: Record<string, unknown>): string[] => {
 };
 
 const getDependencies = (
-  slug: string,
   schema: Record<string, unknown>,
   assets: AgentTool['assets'],
   context: ToolContext
@@ -348,7 +347,7 @@ export const AgentToolGrid: React.FC<AgentToolGridProps> = ({ agentId, companyId
         assets,
       };
 
-      const dependencies = getDependencies(row.slug, configSchema, assets, ctx);
+      const dependencies = getDependencies(configSchema, assets, ctx);
       return {
         ...base,
         dependencies,
@@ -393,7 +392,6 @@ export const AgentToolGrid: React.FC<AgentToolGridProps> = ({ agentId, companyId
           if (t.slug !== slug) return t;
           const next = { ...t, is_enabled: newEnabled };
           const dependencies = getDependencies(
-            t.slug,
             t.config_schema,
             t.assets,
             context ?? DEFAULT_CONTEXT
@@ -427,7 +425,6 @@ export const AgentToolGrid: React.FC<AgentToolGridProps> = ({ agentId, companyId
         if (t.slug !== selected?.slug) return t;
         const next = { ...t, ...updated };
         const dependencies = getDependencies(
-          t.slug,
           t.config_schema,
           t.assets,
           context ?? DEFAULT_CONTEXT
@@ -440,7 +437,6 @@ export const AgentToolGrid: React.FC<AgentToolGridProps> = ({ agentId, companyId
         ? (() => {
             const next = { ...s, ...updated };
             const deps = getDependencies(
-              s.slug,
               s.config_schema,
               s.assets,
               context ?? DEFAULT_CONTEXT
