@@ -54,6 +54,31 @@ const READINESS_BORDER: Record<ToolReadinessStatus, string> = {
   integration_missing: 'border-red-500/35 hover:border-red-500/60',
 };
 
+/** Valores legados do catálogo (agent_tools_001) antes dos tipos semânticos. */
+const LEGACY_TOOL_TYPE_TO_META_KEY: Record<string, AgentToolType> = {
+  action: 'internal_action',
+  media: 'media_action',
+  webhook: 'webhook_action',
+  internal: 'internal_action',
+};
+
+function resolveTypeMeta(raw: string | undefined | null): (typeof TYPE_META)[AgentToolType] {
+  const key = (raw ?? '').trim();
+  if (key && key in TYPE_META) return TYPE_META[key as AgentToolType];
+  const mapped = LEGACY_TOOL_TYPE_TO_META_KEY[key];
+  if (mapped) return TYPE_META[mapped];
+  return TYPE_META.internal_action;
+}
+
+function isToolReadinessStatus(v: string): v is ToolReadinessStatus {
+  return Object.prototype.hasOwnProperty.call(READINESS_BORDER, v);
+}
+
+function resolveReadiness(raw: string | undefined | null): ToolReadinessStatus {
+  const v = (raw ?? 'inactive').trim();
+  return isToolReadinessStatus(v) ? v : 'inactive';
+}
+
 const DEFAULT_CONTEXT: ToolContext = {
   schedulesConfigured: false,
   serviceTypesConfigured: false,
@@ -530,8 +555,8 @@ export const AgentToolGrid: React.FC<AgentToolGridProps> = ({ agentId, companyId
       {/* Grid de cards */}
       <div className="grid grid-cols-2 gap-3">
         {tools.map((tool) => {
-          const meta = TYPE_META[tool.tool_type];
-          const readiness = tool.readiness ?? 'inactive';
+          const meta = resolveTypeMeta(tool.tool_type);
+          const readiness = resolveReadiness(tool.readiness);
           const borderCls = READINESS_BORDER[readiness];
           const isToggling = toggling === tool.slug;
           const missingDeps = (tool.dependencies ?? []).filter((d) => !d.configured);

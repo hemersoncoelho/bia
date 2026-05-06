@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Loader2, X, Plus, AlertCircle } from 'lucide-react';
+import { Save, Loader2, X, Plus, AlertCircle, Maximize2 } from 'lucide-react';
 import type { AiAgent, AiAgentProvider, AiAgentScope } from '../../types';
 
 const PROVIDERS: { value: AiAgentProvider; label: string; models: string[] }[] = [

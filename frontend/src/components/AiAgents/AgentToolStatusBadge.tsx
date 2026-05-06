@@ -42,7 +42,7 @@ export const AgentToolStatusBadge: React.FC<AgentToolStatusBadgeProps> = ({
   status,
   size = 'sm',
 }) => {
-  const meta = META[status];
+  const meta = META[status] ?? META.inactive;
   const textCls = size === 'md' ? 'text-xs' : 'text-[10px]';
 
   return (
