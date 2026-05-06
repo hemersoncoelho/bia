@@ -54,7 +54,7 @@ export const Composer: React.FC<ComposerProps> = ({ onSendMessage, disabled }) =
       }`}
     >
       {/* ── Mode selector ──────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 px-4 pt-3 pb-2.5 border-b border-border/50">
+      <div className="flex items-center gap-1.5 px-4 pt-3.5 pb-3 border-b border-border/50">
         <button
           onClick={() => setMode('reply')}
           disabled={disabled}
@@ -93,7 +93,7 @@ export const Composer: React.FC<ComposerProps> = ({ onSendMessage, disabled }) =
       </div>
 
       {/* ── Input area ─────────────────────────────────────────────────── */}
-      <div className="px-4 py-3">
+      <div className="px-4 py-3.5">
         {disabled ? (
           /* Closed conversation state */
           <div className="flex items-center justify-center gap-2 py-4 text-stone-700">
@@ -111,7 +111,7 @@ export const Composer: React.FC<ComposerProps> = ({ onSendMessage, disabled }) =
             {/* Textarea */}
             <textarea
               ref={textareaRef}
-              className="w-full bg-transparent resize-none px-3.5 pt-3 pb-2 text-sm text-primary placeholder-stone-700 outline-none leading-relaxed no-scrollbar min-h-[56px]"
+              className="w-full bg-transparent resize-none px-3.5 pt-3.5 pb-2 text-sm text-primary placeholder-stone-700 outline-none leading-relaxed no-scrollbar min-h-[64px]"
               placeholder={
                 isNote
                   ? 'Nota interna — visível apenas para sua equipe...'
@@ -125,7 +125,7 @@ export const Composer: React.FC<ComposerProps> = ({ onSendMessage, disabled }) =
             />
 
             {/* Toolbar */}
-            <div className="flex items-center justify-between px-3 pb-2.5 pt-1">
+            <div className="flex items-center justify-between px-3 pb-3 pt-1.5">
               <div className="flex items-center gap-0.5">
                 <button
                   className="p-1.5 text-stone-700 hover:text-stone-400 rounded-md hover:bg-surface/60 transition-colors"

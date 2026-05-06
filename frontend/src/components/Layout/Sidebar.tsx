@@ -39,7 +39,7 @@ const NAV_GROUPS: NavGroup[] = [
       { icon: BarChart3, label: 'Dashboard', to: '/dashboard' },
       { icon: Inbox, label: 'Inbox', to: '/inbox' },
       { icon: CheckSquare, label: 'Tarefas', to: '/tasks' },
-      { icon: Kanban, label: 'Pipeline', to: '/deals' },
+      { icon: Kanban, label: 'CRM', to: '/deals' },
       { icon: CalendarDays, label: 'Agenda', to: '/agenda' },
     ],
   },

@@ -63,7 +63,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   return (
     <div
       onClick={() => onClick(conversation.conversation_id)}
-      className={`relative flex items-start gap-3 px-4 py-3.5 cursor-pointer transition-all duration-150 border-b border-border group
+      className={`relative flex items-start gap-3 px-4 py-4 cursor-pointer transition-all duration-150 border-b border-border group
         ${isActive ? 'bg-surface' : 'hover:bg-surface/50'}
       `}
     >
@@ -76,7 +76,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
 
       {/* Avatar */}
       <div
-        className={`w-9 h-9 rounded-full flex items-center justify-center font-semibold text-[11px] shrink-0 border ${avatarStyle}`}
+        className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold text-[12px] shrink-0 border ${avatarStyle}`}
       >
         {initials}
       </div>
@@ -113,7 +113,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
 
         {/* Row 2: Preview */}
         <p
-          className={`text-xs leading-relaxed line-clamp-2 transition-colors ${
+          className={`text-xs leading-relaxed line-clamp-1 transition-colors mt-0.5 ${
             hasUnread
               ? 'text-stone-400'
               : 'text-stone-600 group-hover:text-stone-500'
@@ -123,7 +123,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
         </p>
 
         {/* Row 3: Atendente + modo */}
-        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
           {/* Modo IA */}
           {isAI && (
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold tracking-wide text-indigo-300 bg-indigo-500/15 px-1.5 py-0.5 rounded-md border border-indigo-500/30">

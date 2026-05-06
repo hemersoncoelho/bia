@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { X, Settings2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
@@ -6,6 +6,7 @@ import { AgentToolStatusBadge } from './AgentToolStatusBadge';
 import { AgentToolDependencyList } from './AgentToolDependencyList';
 import { AgentToolConfigForm } from './AgentToolConfigForm';
 import { AgentToolAssets } from './AgentToolAssets';
+import { AgentToolProductCatalog } from './AgentToolProductCatalog';
 import { AgentToolPayloadPreview } from './AgentToolPayloadPreview';
 import type { AgentTool, AgentToolAsset, ToolContext, ToolDependency, ToolReadinessStatus } from '../../types';
 
@@ -19,6 +20,7 @@ const TYPE_LABEL: Record<string, string> = {
   knowledge_action: 'Conhecimento',
   webhook_action: 'Webhook',
   internal_action: 'Interno',
+  catalog_action: 'Catálogo',
 };
 
 const TYPE_CLS: Record<string, string> = {
@@ -29,6 +31,7 @@ const TYPE_CLS: Record<string, string> = {
   knowledge_action: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
   webhook_action: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
   internal_action: 'text-stone-400 bg-stone-500/10 border-stone-500/20',
+  catalog_action: 'text-teal-400 bg-teal-500/10 border-teal-500/20',
 };
 
 // ── Lógica de prontidão refinada ──────────────────────────────
@@ -46,8 +49,9 @@ const computeReadiness = (
     return 'integration_missing';
   }
 
+  const SOFT_DEPS = new Set(['agent_tool_assets', 'product_catalog']);
   const criticalMissing = dependencies.some(
-    (d) => !d.configured && d.key !== 'agent_tool_assets'
+    (d) => !d.configured && !SOFT_DEPS.has(d.key)
   );
   if (criticalMissing) return 'blocked';
 
@@ -148,6 +152,19 @@ export const AgentToolDrawer: React.FC<AgentToolDrawerProps> = ({
   onToolUpdated,
 }) => {
   const [savingConfig, setSavingConfig] = useState(false);
+  const [productCatalogCount, setProductCatalogCount] = useState<number | null>(null);
+
+  const handleCatalogCountChange = useCallback(
+    (count: number) => {
+      setProductCatalogCount(count);
+      const patchedDeps = dependencies.map((d) =>
+        d.key === 'product_catalog' ? { ...d, configured: count > 0 } : d
+      );
+      const newReadiness = computeReadiness({ ...tool }, patchedDeps);
+      onToolUpdated({ readiness: newReadiness });
+    },
+    [dependencies, tool, onToolUpdated]
+  );
 
   const getWhenToUse = () => {
     const v = tool.when_to_use ?? tool.config_schema.when_to_use;
@@ -179,10 +196,17 @@ export const AgentToolDrawer: React.FC<AgentToolDrawerProps> = ({
     setSavingConfig(false);
   };
 
+  // Deps patchadas com o count local de produtos (quando disponível)
+  const patchedDepsForReadiness = tool.slug === 'buscar_produtos_servicos' && productCatalogCount !== null
+    ? dependencies.map((d) =>
+        d.key === 'product_catalog' ? { ...d, configured: productCatalogCount > 0 } : d
+      )
+    : dependencies;
+
   // Tool atualizada com readiness recomputado para o preview
   const toolWithReadiness: AgentTool = {
     ...tool,
-    readiness: computeReadiness(tool, dependencies),
+    readiness: computeReadiness(tool, patchedDepsForReadiness),
   };
 
   const typeCls = TYPE_CLS[tool.tool_type] ?? TYPE_CLS.internal_action;
@@ -293,6 +317,21 @@ export const AgentToolDrawer: React.FC<AgentToolDrawerProps> = ({
                   const newReadiness = computeReadiness(next, dependencies);
                   onToolUpdated({ assets: updatedAssets, readiness: newReadiness });
                 }}
+              />
+            </Section>
+          )}
+
+          {/* Catálogo de Produtos/Serviços */}
+          {tool.slug === 'buscar_produtos_servicos' && (
+            <Section title="Catálogo de produtos/serviços">
+              <p className="text-[11px] text-stone-500 leading-relaxed mb-3">
+                Cadastre os itens que o agente poderá consultar e apresentar ao cliente.
+                A tool aparece como <strong className="text-stone-400">Pronta</strong> quando
+                houver ao menos um item ativo.
+              </p>
+              <AgentToolProductCatalog
+                companyId={companyId}
+                onCountChange={handleCatalogCountChange}
               />
             </Section>
           )}

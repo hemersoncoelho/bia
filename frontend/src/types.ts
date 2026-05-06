@@ -114,7 +114,8 @@ export type AgentToolType =
   | 'media_action'
   | 'knowledge_action'
   | 'webhook_action'
-  | 'internal_action';
+  | 'internal_action'
+  | 'catalog_action';
 
 export type ToolReadinessStatus =
   | 'ready'
@@ -138,6 +139,20 @@ export interface ToolContext {
   teamsConfigured: boolean;
   mediaStorageConfigured: boolean;
   knowledgeProviderConfigured: boolean;
+  productCatalogConfigured: boolean;
+}
+
+export interface ProductCatalogItem {
+  id: string;
+  company_id: string;
+  name: string;
+  description?: string | null;
+  duration_minutes?: number | null;
+  price?: number | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  service_type_id?: string | null;
 }
 
 // ── Campo declarativo do drawer de configuração ───────────────

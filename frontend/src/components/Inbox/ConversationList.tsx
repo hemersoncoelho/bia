@@ -45,10 +45,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   ];
 
   return (
-    <div className="w-full sm:w-[340px] sm:shrink-0 flex flex-col h-full border-r border-border bg-background">
+    <div className="w-full sm:w-[300px] lg:w-[340px] sm:min-w-[260px] sm:max-w-[340px] sm:shrink-0 flex flex-col h-full border-r border-border bg-background">
 
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="px-5 pt-5 pb-4 border-b border-border shrink-0">
+      {/* ── Header ───────────────────────────────────────────────────── */}
+      <div className="px-4 pt-4 pb-3 border-b border-border shrink-0">
         {/* Title row */}
         <div className="flex items-start justify-between mb-4">
           <div>
@@ -84,7 +84,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           />
           <input
             type="text"
-            className="w-full bg-surface border border-border text-primary text-xs rounded-lg pl-9 pr-8 py-2.5 placeholder-stone-700 focus:border-stone-500 focus:ring-0 outline-none transition-colors"
+            className="w-full bg-surface border border-border text-primary text-sm rounded-lg pl-9 pr-8 py-2.5 placeholder-stone-700 focus:border-stone-500 focus:ring-0 outline-none transition-colors"
             placeholder="Buscar por nome ou mensagem..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -100,7 +100,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
         </div>
 
         {/* Filter tabs */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5 overflow-x-auto no-scrollbar -mx-1 px-1">
           {TABS.map((tab) => (
             <button
               key={tab.id}

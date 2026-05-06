@@ -150,8 +150,9 @@ Localizadas em `supabase/functions/`. Cada função:
 | `audit_logs` | Trilha de auditoria imutável |
 | `kpi_company_daily_snapshots` | Snapshots diários de KPIs para analytics |
 | `schedules` | Horário de funcionamento por empresa e dia da semana (`company_id`, `weekday` 0–6, `opens_at`, `closes_at`, `is_active`) |
-| `service_types` | Tipos de serviço/procedimento por empresa (`name`, `duration_minutes`, `is_active`) |
+| `service_types` | Tipos de serviço/procedimento por empresa (`name`, `duration_minutes` NOT NULL, `is_active`) — **exclusivo do módulo Agenda** |
 | `appointments` | Agendamentos do módulo Agenda (`scheduled_at`, `ends_at`, `status`, `rescheduled_from_id`) |
+| `product_catalog` | Catálogo comercial consultável pelo agente de IA (`name`, `description`, `duration_minutes` nullable, `price` nullable, `is_active`, `sort_order`) — **separado de `service_types`** |
 | `subscription_plans` | Catálogo de planos de assinatura da plataforma (`name`, `price_monthly`, `is_active`) |
 | `company_subscriptions` | Plano ativo por tenant (`plan_id`, `status`: trial/active/churned/suspended, `trial_ends_at`, `churn_reason`) |
 
@@ -188,6 +189,94 @@ A tabela `deals` suporta o ciclo de vida completo de um negócio:
 | `v_users_canonical` | Todos os usuários com sua empresa principal |
 
 ## Módulo de Agentes de IA
+
+Agentes de IA são configurados por empresa na tabela `ai_agents` e orquestrados via n8n.
+
+### Ferramentas do Agente (Agent Tools)
+
+O sistema de ferramentas tem três camadas:
+
+| Tabela | Propósito |
+|--------|-----------|
+| `agent_tool_catalog` | Catálogo canônico do produto (slugs, config_schema, sort_order) |
+| `agent_tool_bindings` | Ativação por agente + config customizada do tenant |
+| `agent_tool_assets` | Arquivos de mídia vinculados a tools (fotos, vídeos) |
+
+**Tipos de ferramenta (`AgentToolType`):**
+
+| Tipo | Cor UI | Descrição |
+|------|--------|-----------|
+| `agenda_action` | azul | Operações de agendamento |
+| `crm_action` | esmeralda | Operações no pipeline/deals |
+| `atendimento_action` | âmbar | Transferência de atendimento |
+| `media_action` | violeta | Envio de mídias |
+| `knowledge_action` | ciano | Busca em base de conhecimento |
+| `webhook_action` | laranja | Chamadas externas |
+| `internal_action` | stone | Ações internas |
+| `catalog_action` | teal | Catálogo de produtos/serviços |
+
+**Status de prontidão (`ToolReadinessStatus`):** `ready` | `incomplete` | `inactive` | `blocked` | `integration_missing`
+
+**Dependências "soft" vs "críticas":** `agent_tool_assets` e `product_catalog` são soft deps — sua ausência causa `incomplete`, não `blocked`. Todas as outras dependências não configuradas causam `blocked`.
+
+**Tools disponíveis no catálogo:**
+
+| Slug | Nome | Tipo | Depende de |
+|------|------|------|------------|
+| `buscar_agenda` | Buscar Agenda | agenda_action | schedules, service_types |
+| `agendar` | Agendar | agenda_action | schedules, service_types |
+| `cancelar_agenda` | Cancelar Agenda | agenda_action | schedules |
+| `buscar_produtos_servicos` | Buscar Produtos/Serviços | catalog_action | product_catalog |
+| `mover_crm` | Mover CRM | crm_action | pipelines, pipeline_stages |
+| `editar_deal_crm` | Editar Deal CRM | crm_action | pipelines |
+| `transferir_atendimento` | Transferir Atendimento | atendimento_action | teams, user_companies |
+| `enviar_foto` | Enviar Foto | media_action | agent_tool_assets, storage.media |
+| `enviar_video` | Enviar Vídeo | media_action | agent_tool_assets, storage.media |
+| `enviar_resumo` | Enviar Resumo | media_action | — |
+| `buscar_conhecimento` | Buscar Conhecimento | knowledge_action | knowledge_provider |
+
+**Componentes em `frontend/src/components/AiAgents/`:**
+
+| Componente | Propósito |
+|------------|-----------|
+| `AgentToolGrid` | Grid 2 colunas com cards de tools, toggle on/off |
+| `AgentToolDrawer` | Painel lateral de configuração (abre ao clicar no card) |
+| `AgentToolConfigForm` | Renderiza campos declarativos do `config_schema.fields` |
+| `AgentToolFieldRenderer` | Renderer de campo individual (text, textarea, number, toggle, select, multiselect) |
+| `AgentToolDependencyList` | Lista de dependências com status configurado/pendente |
+| `AgentToolAssets` | Upload e gestão de assets de mídia (fotos/vídeos) |
+| `AgentToolProductCatalog` | CRUD de produtos/serviços da tool `buscar_produtos_servicos` |
+| `AgentToolPayloadPreview` | Preview JSON do payload enviado ao n8n |
+| `AgentToolStatusBadge` | Badge visual de readiness |
+
+**`ToolContext`** — calculado em `AiAgentDetail.fetchToolContext()`, inclui:
+- `schedulesConfigured` — tem schedules ativos
+- `serviceTypesConfigured` — tem service_types ativos (para tools de agenda)
+- `pipelineConfigured` — tem pipeline + etapas
+- `teamsConfigured` — tem times com membros
+- `mediaStorageConfigured` — sempre `true` (bucket configurado)
+- `knowledgeProviderConfigured` — sempre `false` (pendente integração)
+- `productCatalogConfigured` — tem itens ativos em `product_catalog`
+
+**Padrão crítico de callback em `AgentToolProductCatalog`:**
+O componente recebe `onCountChange` do drawer. Para evitar loop de re-fetch infinito (onCountChange → onToolUpdated → selected muda → tool prop nova → handleCatalogCountChange nova ref → notifyCount nova ref → fetchItems nova ref → useEffect dispara → loop), use sempre `useRef` para estabilizar o callback:
+```tsx
+const onCountChangeRef = useRef(onCountChange);
+useEffect(() => { onCountChangeRef.current = onCountChange; }); // sem deps — atualiza todo render
+const notifyCount = useCallback((list) => { onCountChangeRef.current(...); }, []); // deps vazia — estável
+```
+
+**Migrações das tools:**
+- `agent_tools_001.sql` — tabelas base
+- `agent_tools_002.sql` — catálogo canônico (10 tools)
+- `agent_tools_003.sql` — campos dinâmicos (`fields` no config_schema)
+- `agent_tools_004_assets.sql` — assets de mídia
+- `agent_tools_005_product_catalog.sql` — tabela `product_catalog` + tool `buscar_produtos_servicos` + tipo `catalog_action`
+
+**`service_types` vs `product_catalog`:**
+- `service_types.duration_minutes` é `NOT NULL CHECK (> 0)` — obrigatório para agenda calcular slots. **Nunca alterar esta constraint** — quebra `rpc_get_available_slots`.
+- `product_catalog.duration_minutes` é nullable — catálogo comercial sem exigência de duração.
+- Não misturar: agenda usa `service_types`, agente de IA usa `product_catalog`.
 
 Agentes de IA são configurados por empresa na tabela `ai_agents` e orquestrados via n8n:
 
@@ -347,7 +436,7 @@ scheduled → rescheduled (cria novo appointment, linkado via rescheduled_from_i
 
 ### Tabelas usadas pelo módulo Agenda
 - `schedules` — leitura/escrita via `AgendaSettings`
-- `service_types` — CRUD completo via `AgendaSettings`
+- `service_types` — CRUD completo via `AgendaSettings` (**exclusivo da Agenda** — não confundir com `product_catalog`)
 - `appointments` — leitura/escrita via `AgendaPage`
 
 ### RPCs da Agenda

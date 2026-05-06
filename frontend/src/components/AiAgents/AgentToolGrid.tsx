@@ -43,6 +43,7 @@ const TYPE_META: Record<AgentToolType, { label: string; cls: string; barCls: str
   knowledge_action:  { label: 'Conhecimento',cls: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',        barCls: 'bg-cyan-500' },
   webhook_action:    { label: 'Webhook',     cls: 'text-orange-400 bg-orange-500/10 border-orange-500/20',  barCls: 'bg-orange-500' },
   internal_action:   { label: 'Interno',     cls: 'text-stone-400 bg-stone-500/10 border-stone-500/20',     barCls: 'bg-stone-500' },
+  catalog_action:    { label: 'Catálogo',    cls: 'text-teal-400 bg-teal-500/10 border-teal-500/20',        barCls: 'bg-teal-500' },
 };
 
 const READINESS_BORDER: Record<ToolReadinessStatus, string> = {
@@ -60,6 +61,7 @@ const DEFAULT_CONTEXT: ToolContext = {
   teamsConfigured: false,
   mediaStorageConfigured: true,
   knowledgeProviderConfigured: false,
+  productCatalogConfigured: false,
 };
 
 // ── Helpers de schema ─────────────────────────────────────────
@@ -166,6 +168,12 @@ const getDependencies = (
       configured: context.knowledgeProviderConfigured,
       helpText: 'Provider externo ainda não configurado.',
     },
+    product_catalog: {
+      key: 'product_catalog',
+      label: 'Produtos/serviços cadastrados',
+      configured: context.productCatalogConfigured,
+      helpText: 'Cadastre ao menos um item ativo nesta ferramenta.',
+    },
   };
 
   return dependsOn.map(
@@ -187,7 +195,8 @@ const computeReadiness = (
     return 'integration_missing';
   }
 
-  if (dependencies.some((d) => !d.configured && d.key !== 'agent_tool_assets')) {
+  const SOFT_DEPS = new Set(['agent_tool_assets', 'product_catalog']);
+  if (dependencies.some((d) => !d.configured && !SOFT_DEPS.has(d.key))) {
     return 'blocked';
   }
 

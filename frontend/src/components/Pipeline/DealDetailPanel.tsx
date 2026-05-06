@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   X,
@@ -14,6 +14,8 @@ import {
   Trophy,
   XCircle,
   CheckCircle2,
+  Link2,
+  Search,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useTenant } from '../../contexts/TenantContext';
@@ -93,6 +95,14 @@ export const DealDetailPanel: React.FC<DealDetailPanelProps> = ({
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
 
+  // ── Link conversation ──
+  type ConvOption = { id: string; contact_name: string; channel: string; last_message_preview?: string | null };
+  const [showLinkConv, setShowLinkConv] = useState(false);
+  const [convSearch, setConvSearch] = useState('');
+  const [convOptions, setConvOptions] = useState<ConvOption[]>([]);
+  const [loadingConvs, setLoadingConvs] = useState(false);
+  const [linkingConv, setLinkingConv] = useState(false);
+
   useEffect(() => {
     isEditingRef.current = isEditingName || isEditingValue;
   }, [isEditingName, isEditingValue]);
@@ -102,6 +112,8 @@ export const DealDetailPanel: React.FC<DealDetailPanelProps> = ({
     setConfirmClose(null);
     setLossReason('');
     setCloseError(null);
+    setShowLinkConv(false);
+    setConvSearch('');
   }, [deal?.id]);
 
   useEffect(() => {
@@ -139,7 +151,9 @@ export const DealDetailPanel: React.FC<DealDetailPanelProps> = ({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !isEditingRef.current) {
-        if (confirmClose !== null) {
+        if (showLinkConv) {
+          setShowLinkConv(false);
+        } else if (confirmClose !== null) {
           setConfirmClose(null);
         } else {
           onClose();
@@ -148,9 +162,73 @@ export const DealDetailPanel: React.FC<DealDetailPanelProps> = ({
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose, confirmClose]);
+  }, [onClose, confirmClose, showLinkConv]);
 
   if (!deal) return null;
+
+  // ── Buscar conversas para vincular ──────────────────────
+
+  const fetchConversations = async (search: string) => {
+    if (!currentCompany) return;
+    setLoadingConvs(true);
+    try {
+      let q = supabase
+        .from('conversations')
+        .select('id, channel, contact:contact_id(full_name), messages(body, created_at)')
+        .eq('company_id', currentCompany.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      // Se houver contato vinculado ao deal, priorizar conversas desse contato
+      if (deal.contact_id && !search) {
+        q = supabase
+          .from('conversations')
+          .select('id, channel, contact:contact_id(full_name)')
+          .eq('company_id', currentCompany.id)
+          .eq('contact_id', deal.contact_id)
+          .order('created_at', { ascending: false })
+          .limit(20);
+      }
+
+      const { data } = await q;
+      const rows = (data ?? []) as Array<{ id: string; channel: string; contact: { full_name: string } | null }>;
+      const filtered = search
+        ? rows.filter(r =>
+            r.contact?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+            r.channel?.toLowerCase().includes(search.toLowerCase())
+          )
+        : rows;
+
+      setConvOptions(
+        filtered.map(r => ({
+          id: r.id,
+          contact_name: r.contact?.full_name ?? 'Sem contato',
+          channel: r.channel,
+        }))
+      );
+    } finally {
+      setLoadingConvs(false);
+    }
+  };
+
+  const linkConversation = async (conversationId: string) => {
+    if (!currentCompany) return;
+    setLinkingConv(true);
+    try {
+      const { error: upErr } = await supabase
+        .from('deals')
+        .update({ conversation_id: conversationId, updated_at: new Date().toISOString() })
+        .eq('id', deal.id)
+        .eq('company_id', currentCompany.id);
+      if (upErr) throw upErr;
+      onUpdate?.(deal.id, { conversation_id: conversationId });
+      setShowLinkConv(false);
+    } catch (err: any) {
+      console.error('[DealDetailPanel] linkConversation error:', err);
+    } finally {
+      setLinkingConv(false);
+    }
+  };
 
   const currentStage = stages.find(s => s.id === deal.stage_id);
   const otherStages = stages
@@ -671,34 +749,135 @@ export const DealDetailPanel: React.FC<DealDetailPanelProps> = ({
             </div>
           )}
 
-          {/* Linked conversation */}
-          {deal.conversation && (
-            <div className="p-5">
-              <p className="text-[10px] font-mono uppercase tracking-widest text-stone-600 mb-3">
-                Conversa Vinculada
+          {/* ── Conversa ── sempre visível */}
+          <div className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-stone-600">
+                Conversa
               </p>
+              {!deal.conversation_id && !showLinkConv && (
+                <button
+                  onClick={() => {
+                    setShowLinkConv(true);
+                    fetchConversations('');
+                  }}
+                  className="flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest text-text-muted hover:text-text-main border border-border rounded-lg px-2.5 py-1 hover:bg-surface-hover transition-all"
+                >
+                  <Link2 size={11} />
+                  Vincular
+                </button>
+              )}
+            </div>
+
+            {/* Caso 1: tem conversa vinculada */}
+            {deal.conversation_id && deal.conversation && (
               <button
                 onClick={() => navigate(`/inbox/${deal.conversation_id}`)}
-                className="w-full flex items-center justify-between gap-3 p-3 bg-surface-hover hover:bg-border border border-border rounded-lg transition-all group"
+                className="w-full flex items-center justify-between gap-3 p-3 bg-sky-500/5 hover:bg-sky-500/10 border border-sky-500/20 hover:border-sky-500/40 rounded-lg transition-all group"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-surface-hover border border-border flex items-center justify-center shrink-0">
-                    <MessageSquare size={14} className="text-stone-400" />
+                  <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center shrink-0">
+                    <MessageSquare size={14} className="text-sky-400" />
                   </div>
                   <div className="text-left">
-                    <p className="text-sm font-medium text-primary">
+                    <p className="text-sm font-semibold text-sky-300">
                       {CHANNEL_LABELS[deal.conversation.channel] || deal.conversation.channel}
                     </p>
-                    <p className="text-[11px] text-stone-500 mt-0.5">Ver no Inbox</p>
+                    <p className="text-[11px] text-sky-500/70 mt-0.5">Abrir conversa no Inbox</p>
                   </div>
                 </div>
                 <ExternalLink
                   size={14}
-                  className="text-stone-600 group-hover:text-stone-400 transition-colors shrink-0"
+                  className="text-sky-600 group-hover:text-sky-400 transition-colors shrink-0"
                 />
               </button>
-            </div>
-          )}
+            )}
+
+            {/* Caso 1b: tem conversation_id mas conversation não carregado (join pendente) */}
+            {deal.conversation_id && !deal.conversation && (
+              <button
+                onClick={() => navigate(`/inbox/${deal.conversation_id}`)}
+                className="w-full flex items-center justify-between gap-3 p-3 bg-sky-500/5 hover:bg-sky-500/10 border border-sky-500/20 rounded-lg transition-all group"
+              >
+                <div className="flex items-center gap-2">
+                  <MessageSquare size={14} className="text-sky-400" />
+                  <span className="text-sm text-sky-300 font-medium">Abrir conversa no Inbox</span>
+                </div>
+                <ExternalLink size={14} className="text-sky-600 group-hover:text-sky-400 transition-colors" />
+              </button>
+            )}
+
+            {/* Caso 2: sem conversa — estado vazio */}
+            {!deal.conversation_id && !showLinkConv && (
+              <div
+                className="flex flex-col items-center justify-center py-5 border border-dashed border-border rounded-lg gap-2 cursor-pointer group hover:border-stone-500 hover:bg-surface-hover/30 transition-all"
+                onClick={() => { setShowLinkConv(true); fetchConversations(''); }}
+              >
+                <MessageSquare size={18} className="text-stone-700 group-hover:text-stone-500 transition-colors" />
+                <p className="text-[11px] text-stone-600 group-hover:text-stone-400 text-center leading-relaxed transition-colors">
+                  Nenhuma conversa vinculada.<br />
+                  <span className="text-stone-500 underline underline-offset-2">Clique para vincular</span>
+                </p>
+              </div>
+            )}
+
+            {/* Caso 3: seletor de conversa */}
+            {showLinkConv && (
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-500 pointer-events-none" />
+                  <input
+                    autoFocus
+                    value={convSearch}
+                    onChange={e => {
+                      setConvSearch(e.target.value);
+                      fetchConversations(e.target.value);
+                    }}
+                    placeholder="Buscar por contato ou canal…"
+                    className="w-full bg-surface-hover border border-border rounded-lg pl-7 pr-3 py-2 text-xs text-text-main placeholder:text-text-muted focus:outline-none focus:border-text-muted transition-colors"
+                  />
+                </div>
+
+                <div
+                  className="space-y-1 max-h-48 overflow-y-auto"
+                  style={{ scrollbarWidth: 'thin', scrollbarColor: 'var(--border-color) transparent' }}
+                >
+                  {loadingConvs ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 size={14} className="animate-spin text-stone-500" />
+                    </div>
+                  ) : convOptions.length === 0 ? (
+                    <p className="text-center text-xs text-stone-600 py-4">Nenhuma conversa encontrada.</p>
+                  ) : (
+                    convOptions.map(conv => (
+                      <button
+                        key={conv.id}
+                        onClick={() => linkConversation(conv.id)}
+                        disabled={linkingConv}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-surface-hover border border-transparent hover:border-border text-left transition-all disabled:opacity-50"
+                      >
+                        <div className="w-6 h-6 rounded bg-surface-hover border border-border flex items-center justify-center shrink-0">
+                          <MessageSquare size={11} className="text-stone-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-text-main truncate">{conv.contact_name}</p>
+                          <p className="text-[10px] text-stone-600">{CHANNEL_LABELS[conv.channel] || conv.channel}</p>
+                        </div>
+                        {linkingConv && <Loader2 size={11} className="ml-auto animate-spin text-stone-500 shrink-0" />}
+                      </button>
+                    ))
+                  )}
+                </div>
+
+                <button
+                  onClick={() => { setShowLinkConv(false); setConvSearch(''); }}
+                  className="text-[11px] text-stone-600 hover:text-stone-400 transition-colors w-full text-center pt-1"
+                >
+                  Cancelar
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Assigned user */}
           {deal.assigned_user && (

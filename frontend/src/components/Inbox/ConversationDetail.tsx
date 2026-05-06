@@ -1196,7 +1196,7 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0 border-r border-border relative">
         {/* Header */}
-        <div className="px-5 py-3.5 border-b border-border flex items-center justify-between shrink-0 bg-surface/20 min-h-[64px]">
+        <div className="px-4 sm:px-5 py-3 border-b border-border flex items-center justify-between gap-3 shrink-0 bg-surface/20 min-h-[68px] flex-wrap">
           <div className="flex items-center gap-3">
             {/* Colorful avatar */}
             <div
@@ -1226,7 +1226,7 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             {/* Attendance mode badge + selector */}
             {!isClosed && (
               <AttendanceBadge
@@ -1364,7 +1364,7 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
           className={cn(
             'absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-20',
             'flex items-center justify-center',
-            'w-4 h-10 rounded-full border transition-all duration-200',
+            'w-6 h-12 rounded-full border transition-all duration-200',
             showContext
               ? 'bg-surface border-border text-text-muted hover:text-text-main hover:border-stone-500'
               : 'bg-surface border-border text-text-muted hover:text-text-main hover:border-stone-500'
@@ -1379,7 +1379,7 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
 
       {/* Context Sidebar */}
       {showContext && (
-        <div className="w-72 flex flex-col shrink-0 border-l border-border bg-surface">
+        <div className="w-64 xl:w-72 flex flex-col shrink-0 border-l border-border bg-surface">
 
           {/* Tab bar */}
           <div className="flex shrink-0 border-b border-border">

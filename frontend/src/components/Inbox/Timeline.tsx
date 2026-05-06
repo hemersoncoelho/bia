@@ -462,7 +462,7 @@ export const Timeline: React.FC<TimelineProps> = ({ messages, contactName, loadi
 
   if (loading) {
     return (
-      <div ref={scrollRef} className="flex-1 px-6 py-4 space-y-4 overflow-y-auto no-scrollbar">
+      <div ref={scrollRef} className="flex-1 px-6 py-6 space-y-5 overflow-y-auto no-scrollbar">
         {[1, 2, 3, 4, 5].map((i) => (
           <div
             key={i}
@@ -484,9 +484,9 @@ export const Timeline: React.FC<TimelineProps> = ({ messages, contactName, loadi
   const contactInitial = (contactName || '?').charAt(0).toUpperCase();
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-2 no-scrollbar">
+    <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-3 no-scrollbar">
       {/* Conversation start marker */}
-      <div className="flex items-center gap-3 pt-4 pb-6 select-none">
+      <div className="flex items-center gap-3 pt-5 pb-7 select-none">
         <div className="flex-1 h-px bg-border/40" />
         <span className="text-[10px] font-mono uppercase tracking-widest text-stone-700 px-2">
           Início da conversa
@@ -494,7 +494,7 @@ export const Timeline: React.FC<TimelineProps> = ({ messages, contactName, loadi
         <div className="flex-1 h-px bg-border/40" />
       </div>
 
-      <div className="space-y-0.5">
+      <div className="space-y-1">
         {messages.map((msg, idx) => {
           const dateKey = getDateKey(msg.created_at);
           const showDateSep = !renderedDates.has(dateKey);
@@ -554,7 +554,7 @@ export const Timeline: React.FC<TimelineProps> = ({ messages, contactName, loadi
               {/* ── Contact Message (left) ── */}
               {!msg.is_internal && msg.sender_type === 'contact' && (
                 <div
-                  className={`flex items-end gap-2.5 max-w-[78%] ${sameAsPrev ? 'mt-0.5' : 'mt-3'}`}
+                  className={`flex items-end gap-2.5 max-w-[76%] ${sameAsPrev ? 'mt-1' : 'mt-4'}`}
                 >
                   {/* Avatar */}
                   {!sameAsPrev ? (
@@ -588,7 +588,7 @@ export const Timeline: React.FC<TimelineProps> = ({ messages, contactName, loadi
               {/* ── Agent / Bot Message (right) ── */}
               {!msg.is_internal && isRight && (
                 <div
-                  className={`flex flex-col items-end max-w-[78%] ml-auto ${sameAsPrev ? 'mt-0.5' : 'mt-3'}`}
+                  className={`flex flex-col items-end max-w-[76%] ml-auto ${sameAsPrev ? 'mt-1' : 'mt-4'}`}
                 >
                   {!sameAsPrev && (
                     <div className="flex items-center gap-2 mr-0.5 mb-1">
@@ -634,7 +634,7 @@ export const Timeline: React.FC<TimelineProps> = ({ messages, contactName, loadi
         })}
       </div>
 
-      <div ref={bottomRef} className="h-6" />
+      <div ref={bottomRef} className="h-8" />
     </div>
   );
 };

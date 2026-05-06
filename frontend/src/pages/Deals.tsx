@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { RefreshCw, AlertCircle, CheckCircle, Kanban, Plus } from 'lucide-react';
+import { RefreshCw, AlertCircle, CheckCircle, Kanban, Plus, Settings2 } from 'lucide-react';
 import { useTenant } from '../contexts/TenantContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -7,6 +7,7 @@ import { cn } from '../lib/utils';
 import { StageColumn } from '../components/Pipeline/StageColumn';
 import { DealDetailPanel } from '../components/Pipeline/DealDetailPanel';
 import { NewDealModal } from '../components/Pipeline/NewDealModal';
+import { PipelineSettingsDrawer } from '../components/Pipeline/PipelineSettingsDrawer';
 import type { Deal, DealStatus, PipelineStage } from '../types';
 
 type StatusOption = { value: DealStatus; label: string };
@@ -34,6 +35,7 @@ export const Deals: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<DealStatus>('open');
   const [showNewDeal, setShowNewDeal]   = useState(false);
   const [pipelineId, setPipelineId]     = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Toast notification state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -198,11 +200,11 @@ export const Deals: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-end justify-between border-b border-border pb-5 mb-5 gap-4 shrink-0">
         <div>
           <span className="text-[11px] font-mono uppercase text-stone-500 block mb-2 tracking-widest">
-            Funil de Vendas
+            CRM Comercial
           </span>
           <h1 className="text-3xl font-medium tracking-tight text-primary flex items-center gap-3">
             <Kanban size={26} className="text-stone-500 shrink-0" />
-            Pipeline Comercial
+            Jornada do Cliente
           </h1>
         </div>
 
@@ -234,6 +236,18 @@ export const Deals: React.FC = () => {
             <RefreshCw size={12} className={cn(loading && 'animate-spin')} />
             Atualizar
           </button>
+
+          {/* Configurar CRM — admin/gerente ou platform/system admin */}
+          {canAddDeal && pipelineId && (
+            <button
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-2 px-3 py-2 text-[11px] font-mono uppercase tracking-widest text-text-muted hover:text-text-main border border-border rounded-lg hover:bg-surface-hover transition-all"
+              title="Configurar etapas do CRM"
+            >
+              <Settings2 size={13} />
+              Configurar CRM
+            </button>
+          )}
 
           {/* New Deal — admin/gerente ou platform/system admin */}
           {stages.length > 0 && pipelineId && canAddDeal && (
@@ -310,9 +324,10 @@ export const Deals: React.FC = () => {
               <div className="w-16 h-16 bg-surface border border-border rounded-full flex-center mx-auto mb-5">
                 <Kanban size={24} className="text-stone-600" />
               </div>
-              <h3 className="text-lg font-medium text-primary mb-2">Pipeline sem estágios</h3>
+              <h3 className="text-lg font-medium text-primary mb-2">Nenhuma etapa configurada</h3>
               <p className="text-stone-500 text-sm leading-relaxed">
-                Configure os estágios do pipeline nas configurações da empresa antes de cadastrar negócios.
+                Configure as etapas da jornada do cliente clicando em{' '}
+                <span className="text-text-main font-medium">Configurar CRM</span> no cabeçalho.
               </p>
             </div>
           </div>
@@ -394,6 +409,16 @@ export const Deals: React.FC = () => {
           stages={stages}
           onClose={() => setShowNewDeal(false)}
           onSuccess={() => { setShowNewDeal(false); fetchData(); }}
+        />
+      )}
+
+      {/* ── Pipeline Settings Drawer ── */}
+      {showSettings && pipelineId && (
+        <PipelineSettingsDrawer
+          pipelineId={pipelineId}
+          companyId={currentCompany.id}
+          onClose={() => setShowSettings(false)}
+          onSaved={fetchData}
         />
       )}
     </div>

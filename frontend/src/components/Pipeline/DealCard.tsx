@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { DollarSign, User, Calendar, MoreVertical, MessageSquare, GripVertical } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { DollarSign, User, Calendar, MoreVertical, MessageSquare, GripVertical, ExternalLink } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { Deal, PipelineStage } from '../../types';
 
@@ -38,6 +39,7 @@ export const DealCard: React.FC<DealCardProps> = ({
   const [moving, setMoving] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   const otherStages = stages
     .filter(s => s.id !== deal.stage_id)
@@ -169,7 +171,7 @@ export const DealCard: React.FC<DealCardProps> = ({
         )}
       </div>
 
-      {/* Footer: date + assigned */}
+      {/* Footer: date + assigned + conversation shortcut */}
       <div className="flex items-center justify-between mt-2.5 pt-2.5 border-t border-border">
         <div className="flex items-center gap-1 text-[10px] text-stone-600">
           <Calendar size={9} />
@@ -178,14 +180,35 @@ export const DealCard: React.FC<DealCardProps> = ({
           </span>
         </div>
 
-        {deal.assigned_user && (
-          <div
-            className="w-5 h-5 rounded-full bg-surface-hover border border-border flex items-center justify-center text-[9px] font-semibold text-text-muted uppercase"
-            title={deal.assigned_user.full_name}
-          >
-            {deal.assigned_user.full_name.charAt(0)}
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Acesso rápido à conversa vinculada */}
+          {deal.conversation_id && (
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                navigate(`/inbox/${deal.conversation_id}`);
+              }}
+              title="Ver conversa no Inbox"
+              className={cn(
+                'flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded',
+                'text-stone-400 hover:text-sky-400 hover:bg-sky-400/10 transition-colors'
+              )}
+            >
+              <MessageSquare size={10} />
+              <span>Ver conversa</span>
+              <ExternalLink size={8} className="opacity-60" />
+            </button>
+          )}
+
+          {deal.assigned_user && (
+            <div
+              className="w-5 h-5 rounded-full bg-surface-hover border border-border flex items-center justify-center text-[9px] font-semibold text-text-muted uppercase"
+              title={deal.assigned_user.full_name}
+            >
+              {deal.assigned_user.full_name.charAt(0)}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

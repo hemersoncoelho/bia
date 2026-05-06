@@ -120,6 +120,7 @@ export const AiAgentDetail: React.FC = () => {
       pipelinesRes,
       teamsRes,
       teamMembersRes,
+      productCatalogRes,
     ] = await Promise.all([
       supabase
         .from('schedules')
@@ -143,6 +144,11 @@ export const AiAgentDetail: React.FC = () => {
         .from('user_companies')
         .select('user_id', { count: 'exact', head: true })
         .eq('company_id', currentCompany.id),
+      supabase
+        .from('product_catalog')
+        .select('id', { count: 'exact', head: true })
+        .eq('company_id', currentCompany.id)
+        .eq('is_active', true),
     ]);
 
     const pipelineIds = (pipelinesRes.data ?? []).map((pipeline) => pipeline.id);
@@ -160,6 +166,7 @@ export const AiAgentDetail: React.FC = () => {
       teamsConfigured: (teamsRes.count ?? 0) > 0 && (teamMembersRes.count ?? 0) > 0,
       mediaStorageConfigured: true,
       knowledgeProviderConfigured: false,
+      productCatalogConfigured: (productCatalogRes.count ?? 0) > 0,
     });
   }, [currentCompany]);
 

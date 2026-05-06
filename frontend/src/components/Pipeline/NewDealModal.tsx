@@ -92,7 +92,7 @@ export const NewDealModal: React.FC<NewDealModalProps> = ({
         <div className="flex items-center justify-between mb-5">
           <div>
             <h2 className="text-base font-semibold text-text-main">Novo Negócio</h2>
-            <p className="text-[11px] text-stone-500 mt-0.5">Pipeline Comercial</p>
+            <p className="text-[11px] text-stone-500 mt-0.5">Jornada do Cliente</p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-hover text-text-muted hover:text-text-main transition-colors">
             <X size={16} />

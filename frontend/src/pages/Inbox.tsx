@@ -111,10 +111,10 @@ export const Inbox: React.FC = () => {
   const activeConversation = conversations.find(c => c.conversation_id === activeId);
 
   return (
-    <div className="bg-background border border-border rounded-xl flex overflow-hidden shadow-lg h-[calc(100vh-76px)] sm:h-[calc(100vh-140px)] min-h-0 reveal active">
+    <div className="bg-background border border-border rounded-xl flex overflow-hidden shadow-lg h-[calc(100dvh-5rem)] min-h-0 reveal active">
 
       {/* Conversation list: full width on mobile when no conversation is open */}
-      <div className={`h-full ${activeId ? 'hidden sm:flex' : 'flex'} w-full sm:w-auto`}>
+      <div className={`h-full shrink-0 ${activeId ? 'hidden sm:flex' : 'flex'} w-full sm:w-auto`}>
         <ConversationList
           conversations={filteredConversations}
           allConversations={conversations}
@@ -142,7 +142,7 @@ export const Inbox: React.FC = () => {
             <span className="font-medium">Conversas</span>
           </button>
         )}
-        <div className="flex-1 min-w-0 overflow-hidden">
+        <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
         <ConversationDetail
           conversation={activeConversation}
           onConversationUpdate={fetchInbox}
