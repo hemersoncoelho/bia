@@ -172,26 +172,26 @@ export const DealDetailPanel: React.FC<DealDetailPanelProps> = ({
     if (!currentCompany) return;
     setLoadingConvs(true);
     try {
-      let q = supabase
-        .from('conversations')
-        .select('id, channel, contact:contact_id(full_name), messages(body, created_at)')
-        .eq('company_id', currentCompany.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
+      // Reatribuição de tipos diferentes de query causa TS2589; usar ternário evita isso.
+      const baseSelect = 'id, channel, contact:contact_id(full_name)';
+      const query = (deal.contact_id && !search)
+        ? supabase
+            .from('conversations')
+            .select(baseSelect)
+            .eq('company_id', currentCompany.id)
+            .eq('contact_id', deal.contact_id)
+            .order('created_at', { ascending: false })
+            .limit(20)
+        : supabase
+            .from('conversations')
+            .select(baseSelect + ', messages(body, created_at)')
+            .eq('company_id', currentCompany.id)
+            .order('created_at', { ascending: false })
+            .limit(20);
 
-      // Se houver contato vinculado ao deal, priorizar conversas desse contato
-      if (deal.contact_id && !search) {
-        q = supabase
-          .from('conversations')
-          .select('id, channel, contact:contact_id(full_name)')
-          .eq('company_id', currentCompany.id)
-          .eq('contact_id', deal.contact_id)
-          .order('created_at', { ascending: false })
-          .limit(20);
-      }
-
-      const { data } = await q;
-      const rows = (data ?? []) as Array<{ id: string; channel: string; contact: { full_name: string } | null }>;
+      const { data } = await query;
+      // contact retorna como array no tipo inferido do Supabase; cast via unknown é seguro.
+      const rows = (data ?? []) as unknown as Array<{ id: string; channel: string; contact: { full_name: string } | null }>;
       const filtered = search
         ? rows.filter(r =>
             r.contact?.full_name?.toLowerCase().includes(search.toLowerCase()) ||

@@ -52,7 +52,7 @@ const COLOR_PALETTE = [
 
 export const PipelineSettingsDrawer: React.FC<PipelineSettingsDrawerProps> = ({
   pipelineId,
-  companyId,
+  companyId: _companyId,
   onClose,
   onSaved,
 }) => {
