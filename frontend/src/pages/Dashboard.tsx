@@ -809,9 +809,11 @@ export const Dashboard: React.FC = () => {
 
       let agentQ2 = supabase.from('deals').select('status, amount, owner_user_id, assigned_user:owner_user_id(full_name)').eq('company_id', currentCompany.id).not('owner_user_id', 'is', null).gte('created_at', since);
       if (until) agentQ2 = agentQ2.lte('created_at', until);
-      const agentQ: Promise<{ data: any[]; error: any }> = isAgentView ? Promise.resolve({ data: [], error: null }) : agentQ2;
 
-      const [convRes, agentRes] = await Promise.all([convQ, agentQ]);
+      const [convRes, agentRes] = await Promise.all([
+        convQ,
+        isAgentView ? Promise.resolve({ data: [] as any[], error: null }) : agentQ2,
+      ]);
 
       if (convRes.data) {
         const map: Record<string, PipelineConversionRow> = {};

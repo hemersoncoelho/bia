@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, SlidersHorizontal, Inbox, MessageSquarePlus, X, ChevronDown } from 'lucide-react';
+import { Search, SlidersHorizontal, Inbox, MessageSquarePlus, X } from 'lucide-react';
 import { ConversationItem } from './ConversationItem';
 import type { InboxConversation } from '../../types';
 import type { AdvancedFilters } from '../../pages/Inbox';
