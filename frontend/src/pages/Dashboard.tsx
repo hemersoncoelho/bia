@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { PeriodFilter, periodToStartDate } from '../components/Dashboard/PeriodFilter';
 import type { Period, CustomRange } from '../components/Dashboard/PeriodFilter';
 import {
-  ComposedChart, AreaChart, Area, BarChart, Bar,
+  AreaChart, Area, BarChart, Bar,
   LineChart, Line,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
