@@ -7,6 +7,7 @@ import { PeriodFilter, periodToStartDate } from '../components/Dashboard/PeriodF
 import type { Period, CustomRange } from '../components/Dashboard/PeriodFilter';
 import {
   ComposedChart, AreaChart, Area, BarChart, Bar,
+  LineChart, Line,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
 import {
@@ -19,11 +20,11 @@ import {
 // ── Types ──────────────────────────────────────────────────────
 
 interface KPIData {
-  total_messages:     number;
-  total_leads:        number;
-  open_conversations: number;
-  qualified_leads:    number;
-  overdue_tasks:      number;
+  total_messages:          number;
+  total_leads:             number;
+  open_conversations:      number;
+  qualified_leads:         number;
+  completed_appointments:  number;
 }
 
 interface ChartData {
@@ -613,17 +614,18 @@ export const Dashboard: React.FC = () => {
         let ledQ  = supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).eq('status', 'lead').eq('owner_user_id', effectiveUserId).gte('created_at', since);
         let qualQ = supabase.from('deals').select('contact_id').eq('company_id', currentCompany.id).eq('status', 'open').eq('owner_user_id', effectiveUserId).not('contact_id', 'is', null).gte('created_at', since);
         if (until) { convQ = convQ.lte('created_at', until); msgQ = msgQ.lte('created_at', until); ledQ = ledQ.lte('created_at', until); qualQ = qualQ.lte('created_at', until); }
-        const [convRes, messagesRes, leadsRes, qualifiedDealsRes, overdueRes] = await Promise.all([
-          convQ, msgQ, ledQ, qualQ,
-          supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).eq('assigned_to_user_id', effectiveUserId).lt('due_at', new Date().toISOString()).not('status', 'in', '("done","cancelled")'),
+        let apptQ = supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).eq('status', 'completed').gte('scheduled_at', since);
+        if (until) apptQ = apptQ.lte('scheduled_at', until);
+        const [convRes, messagesRes, leadsRes, qualifiedDealsRes, apptRes] = await Promise.all([
+          convQ, msgQ, ledQ, qualQ, apptQ,
         ]);
         const qualifiedCount = new Set(qualifiedDealsRes.data?.map(d => d.contact_id) ?? []).size;
         setKpis({
-          total_messages:     messagesRes.count ?? 0,
-          total_leads:        leadsRes.count    ?? 0,
-          open_conversations: convRes.count     ?? 0,
-          qualified_leads:    qualifiedCount,
-          overdue_tasks:      overdueRes.count  ?? 0,
+          total_messages:          messagesRes.count ?? 0,
+          total_leads:             leadsRes.count    ?? 0,
+          open_conversations:      convRes.count     ?? 0,
+          qualified_leads:         qualifiedCount,
+          completed_appointments:  apptRes.count     ?? 0,
         });
       } else {
         let convQ = supabase.from('conversations').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).eq('status', 'open').gte('created_at', since);
@@ -631,17 +633,18 @@ export const Dashboard: React.FC = () => {
         let ledQ  = supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).eq('status', 'lead').gte('created_at', since);
         let qualQ = supabase.from('deals').select('contact_id').eq('company_id', currentCompany.id).eq('status', 'open').not('contact_id', 'is', null).gte('created_at', since);
         if (until) { convQ = convQ.lte('created_at', until); msgQ = msgQ.lte('created_at', until); ledQ = ledQ.lte('created_at', until); qualQ = qualQ.lte('created_at', until); }
-        const [convRes, messagesRes, leadsRes, qualifiedDealsRes, overdueRes] = await Promise.all([
-          convQ, msgQ, ledQ, qualQ,
-          supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).lt('due_at', new Date().toISOString()).not('status', 'in', '("done","cancelled")'),
+        let apptQ2 = supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).eq('status', 'completed').gte('scheduled_at', since);
+        if (until) apptQ2 = apptQ2.lte('scheduled_at', until);
+        const [convRes, messagesRes, leadsRes, qualifiedDealsRes, apptRes] = await Promise.all([
+          convQ, msgQ, ledQ, qualQ, apptQ2,
         ]);
         const qualifiedCount = new Set(qualifiedDealsRes.data?.map(d => d.contact_id) ?? []).size;
         setKpis({
-          total_messages:     messagesRes.count ?? 0,
-          total_leads:        leadsRes.count    ?? 0,
-          open_conversations: convRes.count     ?? 0,
-          qualified_leads:    qualifiedCount,
-          overdue_tasks:      overdueRes.count  ?? 0,
+          total_messages:          messagesRes.count ?? 0,
+          total_leads:             leadsRes.count    ?? 0,
+          open_conversations:      convRes.count     ?? 0,
+          qualified_leads:         qualifiedCount,
+          completed_appointments:  apptRes.count     ?? 0,
         });
       }
     } catch (err: any) { setError(err.message || 'Erro ao carregar KPIs.'); }
@@ -735,64 +738,42 @@ export const Dashboard: React.FC = () => {
   }, [currentCompany]);
 
   // ── fetchTrend ──────────────────────────────────────────────
+  // Semântica de coorte: agrupa deals pela data de CRIAÇÃO.
+  // openPipelineAmount = total orçado naquele dia (todos os deals criados)
+  // wonAmount          = receita efetivada que originou naquele dia (deals criados no dia que foram ganhos)
   const fetchTrend = useCallback(async (activePeriod: Period, customRng: CustomRange | null = null) => {
     if (!currentCompany) return;
     setTrendLoading(true);
     const { sinceDate, until } = getRange(activePeriod, customRng);
     const untilDate = until ? until.substring(0, 10) : undefined;
     try {
-      let viewQ = supabase
-        .from('v_kpi_company_daily')
-        .select('snapshot_date, won_amount, open_pipeline_amount, new_deals, won_deals, lost_deals')
+      let allQ = supabase
+        .from('deals')
+        .select('created_at, status, amount')
         .eq('company_id', currentCompany.id)
-        .gte('snapshot_date', sinceDate)
-        .order('snapshot_date', { ascending: true });
-      if (untilDate) viewQ = viewQ.lte('snapshot_date', untilDate);
-      const { data: viewData, error: viewErr } = await viewQ;
+        .gte('created_at', sinceDate);
+      if (untilDate) allQ = allQ.lte('created_at', untilDate);
+      const { data: allDeals } = await allQ;
 
-      if (!viewErr && viewData && viewData.length > 0) {
-        setTrend(viewData.map(row => ({
-          date:               new Date(row.snapshot_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-          wonAmount:          Number(row.won_amount)           || 0,
-          openPipelineAmount: Number(row.open_pipeline_amount) || 0,
-          newDeals:           row.new_deals   || 0,
-          wonDeals:           row.won_deals   || 0,
-          lostDeals:          row.lost_deals  || 0,
-          newLeads:           0,
-        })));
-        return;
-      }
-
-      let wonQ = supabase.from('deals').select('updated_at, amount').eq('company_id', currentCompany.id).eq('status', 'won').gte('updated_at', sinceDate);
-      let allQ = supabase.from('deals').select('created_at, status, amount').eq('company_id', currentCompany.id).gte('created_at', sinceDate);
-      if (untilDate) { wonQ = wonQ.lte('updated_at', untilDate); allQ = allQ.lte('created_at', untilDate); }
-      const [wonRes, allRes] = await Promise.all([wonQ, allQ]);
-
-      const wonByDay: Record<string, { wonAmount: number; wonDeals: number }> = {};
-      const actByDay: Record<string, { newDeals: number; lostDeals: number; openAmount: number }> = {};
-
-      for (const d of (wonRes.data ?? [])) {
-        const day = (d.updated_at as string).substring(0, 10);
-        if (!wonByDay[day]) wonByDay[day] = { wonAmount: 0, wonDeals: 0 };
-        wonByDay[day].wonAmount += Number(d.amount) || 0;
-        wonByDay[day].wonDeals++;
-      }
-      for (const d of (allRes.data ?? [])) {
+      const cohort: Record<string, { totalAmount: number; wonAmount: number; newDeals: number; wonDeals: number; lostDeals: number }> = {};
+      for (const d of (allDeals ?? [])) {
         const day = (d.created_at as string).substring(0, 10);
-        if (!actByDay[day]) actByDay[day] = { newDeals: 0, lostDeals: 0, openAmount: 0 };
-        actByDay[day].newDeals++;
-        if (d.status === 'lost') actByDay[day].lostDeals++;
-        if (d.status === 'open') actByDay[day].openAmount += Number(d.amount) || 0;
+        if (!cohort[day]) cohort[day] = { totalAmount: 0, wonAmount: 0, newDeals: 0, wonDeals: 0, lostDeals: 0 };
+        const val = Number(d.amount) || 0;
+        cohort[day].totalAmount += val;
+        cohort[day].newDeals++;
+        if (d.status === 'won')  { cohort[day].wonAmount += val; cohort[day].wonDeals++; }
+        if (d.status === 'lost')   cohort[day].lostDeals++;
       }
 
       const days = generateDateRange(sinceDate);
       setTrend(days.map(dateStr => ({
         date:               new Date(dateStr + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-        wonAmount:          wonByDay[dateStr]?.wonAmount  ?? 0,
-        openPipelineAmount: actByDay[dateStr]?.openAmount ?? 0,
-        newDeals:           actByDay[dateStr]?.newDeals   ?? 0,
-        wonDeals:           wonByDay[dateStr]?.wonDeals   ?? 0,
-        lostDeals:          actByDay[dateStr]?.lostDeals  ?? 0,
+        openPipelineAmount: cohort[dateStr]?.totalAmount ?? 0,
+        wonAmount:          cohort[dateStr]?.wonAmount   ?? 0,
+        newDeals:           cohort[dateStr]?.newDeals    ?? 0,
+        wonDeals:           cohort[dateStr]?.wonDeals    ?? 0,
+        lostDeals:          cohort[dateStr]?.lostDeals   ?? 0,
         newLeads:           0,
       })));
     } finally { setTrendLoading(false); }
@@ -893,7 +874,7 @@ export const Dashboard: React.FC = () => {
     ? Math.max(1, commercial.dealsByStage.reduce((s, d) => s + d.count, 0))
     : 1;
   const urgentConvs     = charts?.conversasPorPrioridade.find(p => p.prioridade === 'Urgente')?.total ?? 0;
-  const overdueTasks    = kpis?.overdue_tasks ?? 0;
+  const completedAppts  = kpis?.completed_appointments ?? 0;
   const totalForecast   = pipelineConv.reduce((s, r) => s + (r.weighted_forecast ?? 0), 0);
   const openDealCount   = commercial?.dealsByStage.reduce((s, d) => s + d.count, 0) ?? 0;
   const periodLabel = period === 'today' ? 'hoje'
@@ -1058,15 +1039,15 @@ export const Dashboard: React.FC = () => {
       {/* ══════════════════════════════════════════════════════════
           SINAIS DE URGÊNCIA (condicional)
       ══════════════════════════════════════════════════════════ */}
-      {(!loading && !chartsLoading) && (urgentConvs > 0 || overdueTasks > 0) && (
+      {(!loading && !chartsLoading) && (urgentConvs > 0) && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <UrgencySignal count={urgentConvs} label="Conversas Urgentes" icon={<Zap size={16} />}
             level={urgentConvs > 0 ? 'critical' : 'ok'} />
-          <UrgencySignal count={overdueTasks} label="Tarefas Atrasadas" icon={<Clock size={16} />}
-            level={overdueTasks >= 5 ? 'critical' : overdueTasks > 0 ? 'warn' : 'ok'} />
           <UrgencySignal count={kpis?.open_conversations ?? 0} label="Conversas Abertas" icon={<Inbox size={16} />}
             level="ok" />
           <UrgencySignal count={kpis?.qualified_leads ?? 0} label="Leads Qualificados" icon={<BadgeCheck size={16} />}
+            level="ok" />
+          <UrgencySignal count={completedAppts} label="Agendamentos Realizados" icon={<BadgeCheck size={16} />}
             level="ok" />
         </div>
       )}
@@ -1085,8 +1066,8 @@ export const Dashboard: React.FC = () => {
           delay={0}
         />
         <StatCard
-          title="Leads em Aberto"
-          subtitle="Agora"
+          title="Leads Novos"
+          subtitle="No período"
           value={kpis?.total_leads ?? '—'}
           icon={<Target size={15} />}
           accent="text-violet-400"
@@ -1112,17 +1093,11 @@ export const Dashboard: React.FC = () => {
           delay={180}
         />
         <StatCard
-          title="Tarefas Atrasadas"
-          subtitle="Agora"
-          value={kpis?.overdue_tasks ?? '—'}
-          icon={<AlertCircle size={15} />}
-          trend={
-            kpis
-              ? kpis.overdue_tasks === 0 ? 'Em dia' : `${kpis.overdue_tasks} pendente${kpis.overdue_tasks > 1 ? 's' : ''}`
-              : undefined
-          }
-          trendDir={kpis ? (kpis.overdue_tasks === 0 ? 'up' : 'down') : undefined}
-          accent="text-rose-400"
+          title="Agendamentos Realizados"
+          subtitle="No período"
+          value={kpis?.completed_appointments ?? '—'}
+          icon={<BadgeCheck size={15} />}
+          accent="text-emerald-400"
           loading={loading}
           delay={240}
         />
@@ -1141,7 +1116,7 @@ export const Dashboard: React.FC = () => {
           ) : (
             <Panel
               title="Orçamento vs Receita Fechada"
-              subtitle={`Orçamento = coorte criado no dia · Receita = negócios ganhos no dia · ${periodLabel}`}
+              subtitle={`Orçamento = total criado no dia · Receita = efetivado da mesma coorte · ${periodLabel}`}
               action={
                 <Link
                   to="/deals"
@@ -1154,49 +1129,40 @@ export const Dashboard: React.FC = () => {
               {hasTrendData ? (
                 <>
                   <ResponsiveContainer width="100%" height={230} debounce={50}>
-                    <ComposedChart data={trend} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="gradPipeline" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#22D3EE" stopOpacity={0.2} />
-                          <stop offset="95%" stopColor="#22D3EE" stopOpacity={0.02} />
-                        </linearGradient>
-                        <linearGradient id="gradWon" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#10B981" stopOpacity={0.5} />
-                          <stop offset="95%" stopColor="#10B981" stopOpacity={0.05} />
-                        </linearGradient>
-                      </defs>
+                    <LineChart data={trend} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="2 6" stroke="rgba(255,255,255,0.04)" vertical={false} />
                       <XAxis dataKey="date" tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
                       <YAxis tickFormatter={fmtShort} tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} width={54} />
                       <Tooltip content={<ProfoundTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.06)', strokeWidth: 1 }} />
-                      <Area
+                      <Line
                         type="monotone"
                         dataKey="openPipelineAmount"
                         name="Orçamento Aberto"
-                        stroke="#22D3EE"
+                        stroke="rgba(255,255,255,0.75)"
                         strokeWidth={2}
-                        fill="url(#gradPipeline)"
-                        dot={false}
-                        activeDot={{ r: 4, fill: '#22D3EE', strokeWidth: 0 }}
+                        dot={{ r: 3, fill: 'rgba(255,255,255,0.75)', strokeWidth: 0 }}
+                        activeDot={{ r: 5, fill: '#ffffff', strokeWidth: 0 }}
                       />
-                      <Bar
+                      <Line
+                        type="monotone"
                         dataKey="wonAmount"
                         name="Receita Fechada"
-                        fill="url(#gradWon)"
                         stroke="#10B981"
-                        strokeWidth={1}
-                        radius={[3, 3, 0, 0]}
-                        maxBarSize={20}
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: '#10B981', strokeWidth: 0 }}
+                        activeDot={{ r: 5, fill: '#10B981', stroke: '#fff', strokeWidth: 1.5 }}
                       />
-                    </ComposedChart>
+                    </LineChart>
                   </ResponsiveContainer>
                   <div className="flex items-center gap-5 text-[10px] text-zinc-500 font-mono mt-1">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-4 h-[3px] rounded-full inline-block bg-cyan-400" />
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-[2px] rounded-full inline-block bg-white/70" />
+                      <span className="w-2 h-2 rounded-full inline-block bg-white/70" />
                       Orçamento Aberto
                     </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-sm inline-block bg-emerald-500/80" />
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-[2px] rounded-full inline-block bg-emerald-400" />
+                      <span className="w-2 h-2 rounded-full inline-block bg-emerald-400" />
                       Receita Fechada
                     </span>
                   </div>
