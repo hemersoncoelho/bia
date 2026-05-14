@@ -12,18 +12,31 @@ import type { InboxConversation } from '../types';
 
 type FilterTab = 'all' | 'unread' | 'mine' | 'team';
 
+export interface AdvancedFilters {
+  status: 'open' | 'closed' | 'pending' | null;
+  priority: 'low' | 'normal' | 'high' | 'urgent' | null;
+  attendance: 'human' | 'ai' | 'hybrid' | null;
+}
+
+const DEFAULT_ADVANCED_FILTERS: AdvancedFilters = {
+  status: null,
+  priority: null,
+  attendance: null,
+};
+
 export const Inbox: React.FC = () => {
   const { currentCompany } = useTenant();
   const { user } = useAuth();
   const navigate = useNavigate();
   const params = useParams();
-  const routeConversationId = params['*']; 
-  
+  const routeConversationId = params['*'];
+
   const [conversations, setConversations] = useState<InboxConversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 250);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
+  const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>(DEFAULT_ADVANCED_FILTERS);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [initialSendError, setInitialSendError] = useState<{ conversationId: string; error: string } | null>(null);
@@ -82,12 +95,15 @@ export const Inbox: React.FC = () => {
     return () => { supabase.removeChannel(channel); };
   }, [currentCompany]);
 
-  // Apply search + tab filters (memoized + debounced search)
+  // Apply search + tab + advanced filters (memoized + debounced search)
   const filteredConversations = useMemo(() => {
     return conversations.filter(conv => {
       if (activeFilter === 'unread' && (conv.unread_count ?? 0) === 0) return false;
       if (activeFilter === 'mine' && conv.assigned_to_id !== user?.id) return false;
       if (activeFilter === 'team' && (!conv.assigned_to_id || conv.assigned_to_id === user?.id)) return false;
+      if (advancedFilters.status && conv.status !== advancedFilters.status) return false;
+      if (advancedFilters.priority && conv.priority !== advancedFilters.priority) return false;
+      if (advancedFilters.attendance && conv.attendance_mode !== advancedFilters.attendance) return false;
       if (debouncedSearch) {
         const q = debouncedSearch.toLowerCase();
         const nameMatch = conv.contact_name?.toLowerCase().includes(q);
@@ -96,7 +112,7 @@ export const Inbox: React.FC = () => {
       }
       return true;
     });
-  }, [conversations, activeFilter, user?.id, debouncedSearch]);
+  }, [conversations, activeFilter, advancedFilters, user?.id, debouncedSearch]);
 
   const handleSelectConversation = (id: string) => { navigate(`/inbox/${id}`, { preventScrollReset: true }); };
 
@@ -125,6 +141,8 @@ export const Inbox: React.FC = () => {
           setSearchQuery={setSearchQuery}
           activeFilter={activeFilter}
           setActiveFilter={setActiveFilter}
+          advancedFilters={advancedFilters}
+          setAdvancedFilters={setAdvancedFilters}
           onNewConversation={() => setIsModalOpen(true)}
           currentUserId={user?.id}
         />

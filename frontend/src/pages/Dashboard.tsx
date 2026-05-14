@@ -4,7 +4,7 @@ import { useTenant } from '../contexts/TenantContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { PeriodFilter, periodToStartDate } from '../components/Dashboard/PeriodFilter';
-import type { Period } from '../components/Dashboard/PeriodFilter';
+import type { Period, CustomRange } from '../components/Dashboard/PeriodFilter';
 import {
   ComposedChart, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -355,7 +355,7 @@ const StageBar: React.FC<{
           <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">{label}</span>
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-[10px] text-zinc-400 dark:text-zinc-600 font-mono">
-              {count} deal{count !== 1 ? 's' : ''}
+              {count} negócio{count !== 1 ? 's' : ''}
             </span>
             <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">{fmtShort(value)}</span>
           </div>
@@ -576,6 +576,7 @@ export const Dashboard: React.FC = () => {
   const { user } = useAuth();
 
   const [period, setPeriod]                         = useState<Period>('today');
+  const [customRange, setCustomRange]               = useState<CustomRange | null>(null);
   const [loading, setLoading]                       = useState(true);
   const [chartsLoading, setChartsLoading]           = useState(true);
   const [error, setError]                           = useState<string | null>(null);
@@ -592,30 +593,29 @@ export const Dashboard: React.FC = () => {
   const isAgentView     = companyRole === 'agent';
   const effectiveUserId = (impersonatedUser ?? user)?.id ?? null;
 
+  function getRange(p: Period, custom: CustomRange | null): { since: string; sinceDate: string; until: string | null } {
+    if (p === 'custom' && custom) {
+      return { since: custom.from, sinceDate: custom.from.substring(0, 10), until: custom.to };
+    }
+    const since = periodToStartDate(p as Exclude<Period, 'custom'>);
+    return { since, sinceDate: since.substring(0, 10), until: null };
+  }
+
   // ── fetchKPIs ───────────────────────────────────────────────
-  const fetchKPIs = useCallback(async (activePeriod: Period) => {
+  const fetchKPIs = useCallback(async (activePeriod: Period, customRng: CustomRange | null = null) => {
     if (!currentCompany) return;
     setLoading(true); setError(null);
-    const since = periodToStartDate(activePeriod);
+    const { since, until } = getRange(activePeriod, customRng);
     try {
       if (isAgentView && effectiveUserId) {
+        let convQ = supabase.from('conversations').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).eq('status', 'open').eq('assigned_to', effectiveUserId).gte('created_at', since);
+        let msgQ  = supabase.from('messages').select('id, conversations!inner(company_id, assigned_to)', { count: 'exact', head: true }).eq('conversations.company_id', currentCompany.id).eq('conversations.assigned_to', effectiveUserId).gte('created_at', since);
+        let ledQ  = supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).eq('status', 'lead').eq('owner_user_id', effectiveUserId).gte('created_at', since);
+        let qualQ = supabase.from('deals').select('contact_id').eq('company_id', currentCompany.id).eq('status', 'open').eq('owner_user_id', effectiveUserId).not('contact_id', 'is', null).gte('created_at', since);
+        if (until) { convQ = convQ.lte('created_at', until); msgQ = msgQ.lte('created_at', until); ledQ = ledQ.lte('created_at', until); qualQ = qualQ.lte('created_at', until); }
         const [convRes, messagesRes, leadsRes, qualifiedDealsRes, overdueRes] = await Promise.all([
-          supabase.from('conversations').select('id', { count: 'exact', head: true })
-            .eq('company_id', currentCompany.id).eq('status', 'open').eq('assigned_to', effectiveUserId),
-          supabase.from('messages')
-            .select('id, conversations!inner(company_id, assigned_to)', { count: 'exact', head: true })
-            .eq('conversations.company_id', currentCompany.id)
-            .eq('conversations.assigned_to', effectiveUserId).gte('created_at', since),
-          supabase.from('contacts').select('id', { count: 'exact', head: true })
-            .eq('company_id', currentCompany.id).eq('status', 'lead')
-            .eq('owner_user_id', effectiveUserId),
-          supabase.from('deals').select('contact_id')
-            .eq('company_id', currentCompany.id).eq('status', 'open')
-            .eq('owner_user_id', effectiveUserId).not('contact_id', 'is', null),
-          supabase.from('tasks').select('id', { count: 'exact', head: true })
-            .eq('company_id', currentCompany.id).eq('assigned_to_user_id', effectiveUserId)
-            .lt('due_at', new Date().toISOString())
-            .not('status', 'in', '("done","cancelled")'),
+          convQ, msgQ, ledQ, qualQ,
+          supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).eq('assigned_to_user_id', effectiveUserId).lt('due_at', new Date().toISOString()).not('status', 'in', '("done","cancelled")'),
         ]);
         const qualifiedCount = new Set(qualifiedDealsRes.data?.map(d => d.contact_id) ?? []).size;
         setKpis({
@@ -626,29 +626,22 @@ export const Dashboard: React.FC = () => {
           overdue_tasks:      overdueRes.count  ?? 0,
         });
       } else {
-        const [viewRes, messagesRes, qualifiedDealsRes, overdueRes] = await Promise.all([
-          supabase.from('v_company_kpis')
-            .select('total_leads, open_conversations')
-            .eq('company_id', currentCompany.id).single(),
-          supabase.from('messages')
-            .select('id, conversations!inner(company_id)', { count: 'exact', head: true })
-            .eq('conversations.company_id', currentCompany.id).gte('created_at', since),
-          supabase.from('deals').select('contact_id')
-            .eq('company_id', currentCompany.id).eq('status', 'open').not('contact_id', 'is', null),
-          supabase.from('tasks').select('id', { count: 'exact', head: true })
-            .eq('company_id', currentCompany.id)
-            .lt('due_at', new Date().toISOString())
-            .not('status', 'in', '("done","cancelled")'),
+        let convQ = supabase.from('conversations').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).eq('status', 'open').gte('created_at', since);
+        let msgQ  = supabase.from('messages').select('id, conversations!inner(company_id)', { count: 'exact', head: true }).eq('conversations.company_id', currentCompany.id).gte('created_at', since);
+        let ledQ  = supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).eq('status', 'lead').gte('created_at', since);
+        let qualQ = supabase.from('deals').select('contact_id').eq('company_id', currentCompany.id).eq('status', 'open').not('contact_id', 'is', null).gte('created_at', since);
+        if (until) { convQ = convQ.lte('created_at', until); msgQ = msgQ.lte('created_at', until); ledQ = ledQ.lte('created_at', until); qualQ = qualQ.lte('created_at', until); }
+        const [convRes, messagesRes, leadsRes, qualifiedDealsRes, overdueRes] = await Promise.all([
+          convQ, msgQ, ledQ, qualQ,
+          supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).lt('due_at', new Date().toISOString()).not('status', 'in', '("done","cancelled")'),
         ]);
-        if (viewRes.error && viewRes.error.code !== 'PGRST116') throw viewRes.error;
-        const v = viewRes.data;
         const qualifiedCount = new Set(qualifiedDealsRes.data?.map(d => d.contact_id) ?? []).size;
         setKpis({
-          total_messages:     messagesRes.count    ?? 0,
-          total_leads:        v?.total_leads        ?? 0,
-          open_conversations: v?.open_conversations ?? 0,
+          total_messages:     messagesRes.count ?? 0,
+          total_leads:        leadsRes.count    ?? 0,
+          open_conversations: convRes.count     ?? 0,
           qualified_leads:    qualifiedCount,
-          overdue_tasks:      overdueRes.count      ?? 0,
+          overdue_tasks:      overdueRes.count  ?? 0,
         });
       }
     } catch (err: any) { setError(err.message || 'Erro ao carregar KPIs.'); }
@@ -656,12 +649,13 @@ export const Dashboard: React.FC = () => {
   }, [currentCompany, isAgentView, effectiveUserId]);
 
   // ── fetchCharts ─────────────────────────────────────────────
-  const fetchCharts = useCallback(async (activePeriod: Period) => {
+  const fetchCharts = useCallback(async (activePeriod: Period, customRng: CustomRange | null = null) => {
     if (!currentCompany) return;
     setChartsLoading(true);
-    const since = periodToStartDate(activePeriod);
+    const { since, until } = getRange(activePeriod, customRng);
     let convQuery  = supabase.from('conversations').select('channel, priority').eq('company_id', currentCompany.id).gte('created_at', since);
     let tasksQuery = supabase.from('tasks').select('status').eq('company_id', currentCompany.id).gte('created_at', since);
+    if (until) { convQuery = convQuery.lte('created_at', until); tasksQuery = tasksQuery.lte('created_at', until); }
     if (isAgentView && effectiveUserId) {
       convQuery  = convQuery.eq('assigned_to', effectiveUserId);
       tasksQuery = tasksQuery.eq('assigned_to_user_id', effectiveUserId);
@@ -688,16 +682,18 @@ export const Dashboard: React.FC = () => {
   }, [currentCompany, isAgentView, effectiveUserId]);
 
   // ── fetchCommercial ─────────────────────────────────────────
-  const fetchCommercial = useCallback(async (activePeriod: Period) => {
+  const fetchCommercial = useCallback(async (activePeriod: Period, customRng: CustomRange | null = null) => {
     if (!currentCompany) return;
     setCommercialLoading(true);
-    const since = periodToStartDate(activePeriod);
+    const { since, until } = getRange(activePeriod, customRng);
     try {
-      const { data: dealsData } = await supabase
+      let dealsQ = supabase
         .from('deals')
         .select('status, amount, pipeline_stages(name, color, position)')
         .eq('company_id', currentCompany.id)
         .gte('created_at', since);
+      if (until) dealsQ = dealsQ.lte('created_at', until);
+      const { data: dealsData } = await dealsQ;
 
       let pipelineValue = 0;
       let wonValue = 0, wonCount = 0, lostCount = 0;
@@ -739,17 +735,20 @@ export const Dashboard: React.FC = () => {
   }, [currentCompany]);
 
   // ── fetchTrend ──────────────────────────────────────────────
-  const fetchTrend = useCallback(async (activePeriod: Period) => {
+  const fetchTrend = useCallback(async (activePeriod: Period, customRng: CustomRange | null = null) => {
     if (!currentCompany) return;
     setTrendLoading(true);
-    const sinceDate = periodToStartDate(activePeriod).substring(0, 10);
+    const { sinceDate, until } = getRange(activePeriod, customRng);
+    const untilDate = until ? until.substring(0, 10) : undefined;
     try {
-      const { data: viewData, error: viewErr } = await supabase
+      let viewQ = supabase
         .from('v_kpi_company_daily')
         .select('snapshot_date, won_amount, open_pipeline_amount, new_deals, won_deals, lost_deals')
         .eq('company_id', currentCompany.id)
         .gte('snapshot_date', sinceDate)
         .order('snapshot_date', { ascending: true });
+      if (untilDate) viewQ = viewQ.lte('snapshot_date', untilDate);
+      const { data: viewData, error: viewErr } = await viewQ;
 
       if (!viewErr && viewData && viewData.length > 0) {
         setTrend(viewData.map(row => ({
@@ -764,17 +763,10 @@ export const Dashboard: React.FC = () => {
         return;
       }
 
-      const [wonRes, allRes] = await Promise.all([
-        supabase.from('deals')
-          .select('updated_at, amount')
-          .eq('company_id', currentCompany.id)
-          .eq('status', 'won')
-          .gte('updated_at', sinceDate),
-        supabase.from('deals')
-          .select('created_at, status, amount')
-          .eq('company_id', currentCompany.id)
-          .gte('created_at', sinceDate),
-      ]);
+      let wonQ = supabase.from('deals').select('updated_at, amount').eq('company_id', currentCompany.id).eq('status', 'won').gte('updated_at', sinceDate);
+      let allQ = supabase.from('deals').select('created_at, status, amount').eq('company_id', currentCompany.id).gte('created_at', sinceDate);
+      if (untilDate) { wonQ = wonQ.lte('updated_at', untilDate); allQ = allQ.lte('created_at', untilDate); }
+      const [wonRes, allRes] = await Promise.all([wonQ, allQ]);
 
       const wonByDay: Record<string, { wonAmount: number; wonDeals: number }> = {};
       const actByDay: Record<string, { newDeals: number; lostDeals: number; openAmount: number }> = {};
@@ -807,24 +799,19 @@ export const Dashboard: React.FC = () => {
   }, [currentCompany]);
 
   // ── fetchAnalytics ──────────────────────────────────────────
-  const fetchAnalytics = useCallback(async (activePeriod: Period) => {
+  const fetchAnalytics = useCallback(async (activePeriod: Period, customRng: CustomRange | null = null) => {
     if (!currentCompany) return;
     setAnalyticsLoading(true);
-    const since = periodToStartDate(activePeriod);
+    const { since, until } = getRange(activePeriod, customRng);
     try {
-      const [convRes, agentRes] = await Promise.all([
-        supabase.from('deals')
-          .select('status, amount, stage_id, pipeline_stages(name, position)')
-          .eq('company_id', currentCompany.id)
-          .gte('created_at', since),
-        isAgentView
-          ? Promise.resolve({ data: [] as any[], error: null })
-          : supabase.from('deals')
-              .select('status, amount, owner_user_id, assigned_user:owner_user_id(full_name)')
-              .eq('company_id', currentCompany.id)
-              .not('owner_user_id', 'is', null)
-              .gte('created_at', since),
-      ]);
+      let convQ = supabase.from('deals').select('status, amount, stage_id, pipeline_stages(name, position)').eq('company_id', currentCompany.id).gte('created_at', since);
+      if (until) convQ = convQ.lte('created_at', until);
+
+      let agentQ2 = supabase.from('deals').select('status, amount, owner_user_id, assigned_user:owner_user_id(full_name)').eq('company_id', currentCompany.id).not('owner_user_id', 'is', null).gte('created_at', since);
+      if (until) agentQ2 = agentQ2.lte('created_at', until);
+      const agentQ: Promise<{ data: any[]; error: any }> = isAgentView ? Promise.resolve({ data: [], error: null }) : agentQ2;
+
+      const [convRes, agentRes] = await Promise.all([convQ, agentQ]);
 
       if (convRes.data) {
         const map: Record<string, PipelineConversionRow> = {};
@@ -867,15 +854,28 @@ export const Dashboard: React.FC = () => {
     } finally { setAnalyticsLoading(false); }
   }, [currentCompany, isAgentView]);
 
-  const handlePeriodChange = useCallback((p: Period) => { setPeriod(p); }, []);
+  const handlePeriodChange = useCallback((p: Period) => {
+    setPeriod(p);
+    if (p !== 'custom') setCustomRange(null);
+    else if (!customRange) {
+      const now = new Date();
+      const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      setCustomRange({ from, to: now.toISOString() });
+    }
+  }, [customRange]);
+
+  const handleCustomRangeChange = useCallback((r: CustomRange) => {
+    setCustomRange(r);
+  }, []);
 
   useEffect(() => {
-    fetchKPIs(period); fetchCharts(period); fetchCommercial(period); fetchTrend(period); fetchAnalytics(period);
+    fetchKPIs(period, customRange); fetchCharts(period, customRange); fetchCommercial(period, customRange); fetchTrend(period, customRange); fetchAnalytics(period, customRange);
   }, [currentCompany]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    fetchKPIs(period); fetchCharts(period); fetchCommercial(period); fetchTrend(period); fetchAnalytics(period);
-  }, [period]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (period === 'custom' && !customRange) return;
+    fetchKPIs(period, customRange); fetchCharts(period, customRange); fetchCommercial(period, customRange); fetchTrend(period, customRange); fetchAnalytics(period, customRange);
+  }, [period, customRange]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Animated pipeline value for hero
   const animatedPipeline = useCountUp(commercial?.pipelineValue ?? 0, 1000);
@@ -894,7 +894,13 @@ export const Dashboard: React.FC = () => {
   const overdueTasks    = kpis?.overdue_tasks ?? 0;
   const totalForecast   = pipelineConv.reduce((s, r) => s + (r.weighted_forecast ?? 0), 0);
   const openDealCount   = commercial?.dealsByStage.reduce((s, d) => s + d.count, 0) ?? 0;
-  const periodLabel     = period === 'today' ? 'hoje' : period === '7d' ? 'últimos 7 dias' : period === '30d' ? 'este mês' : 'últimos 90 dias';
+  const periodLabel = period === 'today' ? 'hoje'
+    : period === '7d'  ? 'esta semana'
+    : period === '30d' ? 'este mês'
+    : period === '90d' ? 'últimos 3 meses'
+    : customRange
+      ? `${customRange.from.substring(0, 10)} → ${customRange.to.substring(0, 10)}`
+      : 'período personalizado';
   const maxOpenDeals    = Math.max(...pipelineConv.map(r => r.open_deals), 1);
   const maxAgentAmount  = Math.max(...agentPerf.map(a => a.won_amount), 1);
   const totalCanal      = charts?.conversasPorCanal.reduce((s, c) => s + c.total, 0) ?? 1;
@@ -917,7 +923,12 @@ export const Dashboard: React.FC = () => {
             <span className="text-zinc-400 dark:text-zinc-500 text-base sm:text-xl font-normal">{currentCompany.name}</span>
           </h1>
         </div>
-        <PeriodFilter value={period} onChange={handlePeriodChange} />
+        <PeriodFilter
+          value={period}
+          onChange={handlePeriodChange}
+          customRange={customRange}
+          onCustomRangeChange={handleCustomRangeChange}
+        />
       </div>
 
       {/* ══════════════════════════════════════════════════════════
@@ -927,7 +938,7 @@ export const Dashboard: React.FC = () => {
         <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 px-4 py-3 rounded-xl flex items-center justify-between text-sm">
           <div className="flex items-center gap-2"><AlertCircle size={16} />{error}</div>
           <button
-            onClick={() => { fetchKPIs(period); fetchCharts(period); }}
+            onClick={() => { fetchKPIs(period, customRange); fetchCharts(period, customRange); }}
             className="text-xs font-mono px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 transition-colors"
           >
             Tentar novamente
@@ -950,11 +961,11 @@ export const Dashboard: React.FC = () => {
             <div className="flex items-center gap-2 mb-1">
               <Zap size={12} className="text-blue-400 dark:text-blue-400" />
               <p className="text-[10px] font-mono uppercase tracking-widest text-blue-500 dark:text-blue-400">
-                Pipeline em Aberto
+                Orçamento em Aberto
               </p>
             </div>
             <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 mb-3">
-              Deals criados no período · {periodLabel}
+              Negócios criados no período · {periodLabel}
             </p>
 
             {commercialLoading ? (
@@ -969,11 +980,11 @@ export const Dashboard: React.FC = () => {
                 </p>
                 {openDealCount > 0 && (
                   <p className="text-sm text-zinc-400 mt-2 font-mono">
-                    {openDealCount} deal{openDealCount !== 1 ? 's' : ''} em aberto
+                    {openDealCount} negócio{openDealCount !== 1 ? 's' : ''} em aberto
                   </p>
                 )}
                 {openDealCount === 0 && !commercialLoading && (
-                  <p className="text-sm text-zinc-600 mt-2 font-mono">Nenhum deal em aberto no período</p>
+                  <p className="text-sm text-zinc-600 mt-2 font-mono">Nenhum negócio em aberto no período</p>
                 )}
               </>
             )}
@@ -1127,14 +1138,14 @@ export const Dashboard: React.FC = () => {
             <SkeletonPanel h="h-80" />
           ) : (
             <Panel
-              title="Pipeline vs Receita Fechada"
-              subtitle={`Pipeline = coorte criado no dia · Receita = deals ganhos no dia · ${periodLabel}`}
+              title="Orçamento vs Receita Fechada"
+              subtitle={`Orçamento = coorte criado no dia · Receita = negócios ganhos no dia · ${periodLabel}`}
               action={
                 <Link
                   to="/deals"
                   className="flex items-center gap-1 text-[10px] font-mono text-orange-500 dark:text-orange-400 hover:underline transition-colors shrink-0"
                 >
-                  ver deals <ChevronRight size={10} />
+                  ver negócios <ChevronRight size={10} />
                 </Link>
               }
             >
@@ -1159,7 +1170,7 @@ export const Dashboard: React.FC = () => {
                       <Area
                         type="monotone"
                         dataKey="openPipelineAmount"
-                        name="Pipeline Aberto"
+                        name="Orçamento Aberto"
                         stroke="#22D3EE"
                         strokeWidth={2}
                         fill="url(#gradPipeline)"
@@ -1180,7 +1191,7 @@ export const Dashboard: React.FC = () => {
                   <div className="flex items-center gap-5 text-[10px] text-zinc-500 font-mono mt-1">
                     <span className="flex items-center gap-1.5">
                       <span className="w-4 h-[3px] rounded-full inline-block bg-cyan-400" />
-                      Pipeline Aberto
+                      Orçamento Aberto
                     </span>
                     <span className="flex items-center gap-1.5">
                       <span className="w-3 h-3 rounded-sm inline-block bg-emerald-500/80" />
@@ -1204,8 +1215,8 @@ export const Dashboard: React.FC = () => {
             <SkeletonPanel h="h-80" />
           ) : (
             <Panel
-              title="Pipeline por Etapa"
-              subtitle="Deals abertos · barra proporcional à quantidade"
+              title="Orçamento por Etapa"
+              subtitle="Negócios abertos · barra proporcional à quantidade"
               className="h-full"
             >
               {commercial && commercial.dealsByStage.length > 0 ? (
@@ -1231,7 +1242,7 @@ export const Dashboard: React.FC = () => {
               ) : (
                 <div className="flex flex-col items-center justify-center py-12 gap-3">
                   <Layers size={32} className="text-zinc-300 dark:text-zinc-700" />
-                  <p className="text-zinc-400 dark:text-zinc-600 text-sm text-center">Nenhum deal em aberto</p>
+                  <p className="text-zinc-400 dark:text-zinc-600 text-sm text-center">Nenhum negócio em aberto</p>
                 </div>
               )}
             </Panel>
@@ -1240,14 +1251,14 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* ══════════════════════════════════════════════════════════
-          LINHA 2 — Atividade do Pipeline + Conversas por Canal
+          LINHA 2 — Atividade do Orçamento + Conversas por Canal
           ETAPAs 6 e 7
       ══════════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-        {/* ETAPA 6 — Atividade do Pipeline: barras arredondadas */}
+        {/* ETAPA 6 — Atividade do Orçamento: barras arredondadas */}
         {trendLoading ? <SkeletonPanel /> : (
-          <Panel title="Atividade do Pipeline" subtitle="Novos, ganhos e perdidos por dia no período">
+          <Panel title="Atividade do Orçamento" subtitle="Novos, ganhos e perdidos por dia no período">
             {hasTrendData && trend.some(p => p.newDeals > 0 || p.wonDeals > 0 || p.lostDeals > 0) ? (
               <>
                 <ResponsiveContainer width="100%" height={200} debounce={50}>
@@ -1285,7 +1296,7 @@ export const Dashboard: React.FC = () => {
             ) : (
               <div className="flex flex-col items-center justify-center h-44 gap-3">
                 <Activity size={32} className="text-zinc-300 dark:text-zinc-700" />
-                <p className="text-zinc-400 dark:text-zinc-600 text-sm">Sem dados de pipeline</p>
+                <p className="text-zinc-400 dark:text-zinc-600 text-sm">Sem dados de orçamento</p>
               </div>
             )}
           </Panel>
@@ -1424,8 +1435,8 @@ export const Dashboard: React.FC = () => {
           {/* ETAPA 9.1 — Conversão do Pipeline: barras duplas sobrepostas */}
           {analyticsLoading ? <SkeletonPanel /> : (
             <Panel
-              title="Conversão do Pipeline"
-              subtitle="Deals criados no período · barra: abertos vs ganhos"
+              title="Conversão do Orçamento"
+              subtitle="Negócios criados no período · barra: abertos vs ganhos"
             >
               {pipelineConv.length > 0 ? (
                 <div className="space-y-4">
@@ -1459,7 +1470,7 @@ export const Dashboard: React.FC = () => {
               ) : (
                 <div className="flex flex-col items-center justify-center py-10 gap-3">
                   <TrendingUp size={32} className="text-zinc-300 dark:text-zinc-700" />
-                  <p className="text-zinc-400 dark:text-zinc-600 text-sm">Nenhum deal encontrado para este pipeline</p>
+                  <p className="text-zinc-400 dark:text-zinc-600 text-sm">Nenhum negócio encontrado para este orçamento</p>
                 </div>
               )}
             </Panel>

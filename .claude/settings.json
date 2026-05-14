@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"OBRIGATÓRIO: Invoque a skill /graphify antes de prosseguir com esta busca, se ainda não o fez neste turno.\"}}'",
+            "statusMessage": "Lembrando /graphify..."
+          }
+        ]
+      }
+    ]
+  }
+}
