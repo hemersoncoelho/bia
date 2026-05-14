@@ -63,7 +63,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   return (
     <div
       onClick={() => onClick(conversation.conversation_id)}
-      className={`relative flex items-start gap-3 px-4 py-4 cursor-pointer transition-all duration-150 border-b border-border group
+      className={`relative flex items-start gap-3 px-4 py-5 cursor-pointer transition-all duration-150 border-b border-border group
         ${isActive ? 'bg-surface' : 'hover:bg-surface/50'}
       `}
     >

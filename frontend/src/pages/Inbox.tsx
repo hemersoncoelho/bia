@@ -16,12 +16,14 @@ export interface AdvancedFilters {
   status: 'open' | 'closed' | 'pending' | null;
   priority: 'low' | 'normal' | 'high' | 'urgent' | null;
   attendance: 'human' | 'ai' | 'hybrid' | null;
+  agent: string | null;
 }
 
 const DEFAULT_ADVANCED_FILTERS: AdvancedFilters = {
   status: null,
   priority: null,
   attendance: null,
+  agent: null,
 };
 
 export const Inbox: React.FC = () => {
@@ -33,6 +35,7 @@ export const Inbox: React.FC = () => {
 
   const [conversations, setConversations] = useState<InboxConversation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [agents, setAgents] = useState<Array<{ id: string; name: string }>>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 250);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
@@ -73,6 +76,25 @@ export const Inbox: React.FC = () => {
 
   useEffect(() => { fetchInbox(); }, [fetchInbox]);
 
+  // Busca agentes da empresa para o filtro
+  useEffect(() => {
+    if (!currentCompany) return;
+    supabase
+      .from('user_companies')
+      .select('user_id')
+      .eq('company_id', currentCompany.id)
+      .then(({ data: ucData }) => {
+        if (!ucData?.length) return;
+        supabase
+          .from('user_profiles')
+          .select('id, full_name')
+          .in('id', ucData.map(uc => uc.user_id))
+          .then(({ data: profiles }) => {
+            setAgents((profiles || []).map(p => ({ id: p.id, name: p.full_name || 'Usuário' })));
+          });
+      });
+  }, [currentCompany]);
+
   // Realtime: atualiza a lista silenciosamente quando chegam novos eventos
   // fetchInboxRef garante que o canal não seja recriado a cada render
   useEffect(() => {
@@ -104,6 +126,7 @@ export const Inbox: React.FC = () => {
       if (advancedFilters.status && conv.status !== advancedFilters.status) return false;
       if (advancedFilters.priority && conv.priority !== advancedFilters.priority) return false;
       if (advancedFilters.attendance && conv.attendance_mode !== advancedFilters.attendance) return false;
+      if (advancedFilters.agent && conv.assigned_to_id !== advancedFilters.agent) return false;
       if (debouncedSearch) {
         const q = debouncedSearch.toLowerCase();
         const nameMatch = conv.contact_name?.toLowerCase().includes(q);
@@ -145,6 +168,7 @@ export const Inbox: React.FC = () => {
           setAdvancedFilters={setAdvancedFilters}
           onNewConversation={() => setIsModalOpen(true)}
           currentUserId={user?.id}
+          agents={agents}
         />
       </div>
 

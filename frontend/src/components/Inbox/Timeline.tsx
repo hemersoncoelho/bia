@@ -73,16 +73,18 @@ function formatDuration(seconds: number): string {
 
 // ── Status icon ───────────────────────────────────────────────────────────────
 
-function StatusIcon({ status }: { status: string }) {
+function StatusIcon({ status, isDark = false }: { status: string; isDark?: boolean }) {
+  const dimColor = isDark ? 'text-white/45' : 'text-stone-500';
+  const readColor = isDark ? 'text-blue-300' : 'text-blue-400';
   switch (status) {
     case 'queued':
-      return <Clock size={11} className="text-stone-700" />;
+      return <Clock size={11} className={isDark ? 'text-white/30' : 'text-stone-600'} />;
     case 'sent':
-      return <Check size={11} className="text-stone-600" />;
+      return <Check size={11} className={dimColor} />;
     case 'delivered':
-      return <CheckCheck size={11} className="text-stone-600" />;
+      return <CheckCheck size={11} className={dimColor} />;
     case 'read':
-      return <CheckCheck size={11} className="text-blue-400" />;
+      return <CheckCheck size={11} className={readColor} />;
     case 'failed':
       return <AlertCircle size={11} className="text-rose-500" />;
     default:
@@ -618,15 +620,13 @@ export const Timeline: React.FC<TimelineProps> = ({ messages, contactName, loadi
                     <MessageContent msg={msg} isDark={isBot} />
                   </div>
 
-                  {/* Status */}
-                  {!isBot && !sameAsPrev && (
-                    <div className="flex items-center gap-1 mt-0.5 mr-0.5">
-                      <StatusIcon status={msg.status} />
-                      {msg.status === 'failed' && (
-                        <span className="text-[10px] text-rose-500 font-mono">falha</span>
-                      )}
-                    </div>
-                  )}
+                  {/* Status — exibe em toda mensagem de agente ou bot */}
+                  <div className="flex items-center gap-1 mt-0.5 mr-0.5">
+                    <StatusIcon status={msg.status} isDark={isBot} />
+                    {msg.status === 'failed' && (
+                      <span className="text-[10px] text-rose-500 font-mono">falha</span>
+                    )}
+                  </div>
                 </div>
               )}
             </React.Fragment>

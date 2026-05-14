@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, SlidersHorizontal, Inbox, MessageSquarePlus, X } from 'lucide-react';
 import { ConversationItem } from './ConversationItem';
 import type { InboxConversation } from '../../types';
@@ -20,6 +20,7 @@ interface ConversationListProps {
   setAdvancedFilters: (f: AdvancedFilters) => void;
   onNewConversation: () => void;
   currentUserId?: string | null;
+  agents: Array<{ id: string; name: string }>;
 }
 
 type FilterChipProps = {
@@ -31,7 +32,7 @@ type FilterChipProps = {
 const FilterChip: React.FC<FilterChipProps> = ({ label, active, onClick }) => (
   <button
     onClick={onClick}
-    className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all border ${
+    className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all border ${
       active
         ? 'bg-blue-500/15 border-blue-500/30 text-blue-400'
         : 'bg-transparent border-border text-stone-500 hover:text-stone-300 hover:border-stone-600'
@@ -60,11 +61,162 @@ const ATTENDANCE_OPTIONS: { value: AdvancedFilters['attendance']; label: string 
   { value: 'hybrid', label: 'Híbrido' },
 ];
 
-const DEFAULT_FILTERS: AdvancedFilters = { status: null, priority: null, attendance: null };
+const DEFAULT_FILTERS: AdvancedFilters = { status: null, priority: null, attendance: null, agent: null };
 
 function countActiveFilters(f: AdvancedFilters): number {
-  return [f.status, f.priority, f.attendance].filter(Boolean).length;
+  return [f.status, f.priority, f.attendance, f.agent].filter(Boolean).length;
 }
+
+// ── Filters Modal ─────────────────────────────────────────────────────────────
+
+const FiltersModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  current: AdvancedFilters;
+  onApply: (f: AdvancedFilters) => void;
+  agents: Array<{ id: string; name: string }>;
+}> = ({ isOpen, onClose, current, onApply, agents }) => {
+  const [local, setLocal] = useState<AdvancedFilters>(current);
+
+  useEffect(() => {
+    if (isOpen) setLocal(current);
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!isOpen) return null;
+
+  function toggleStatus(val: AdvancedFilters['status']) {
+    setLocal(l => ({ ...l, status: l.status === val ? null : val }));
+  }
+  function togglePriority(val: AdvancedFilters['priority']) {
+    setLocal(l => ({ ...l, priority: l.priority === val ? null : val }));
+  }
+  function toggleAttendance(val: AdvancedFilters['attendance']) {
+    setLocal(l => ({ ...l, attendance: l.attendance === val ? null : val }));
+  }
+  function toggleAgent(val: string) {
+    setLocal(l => ({ ...l, agent: l.agent === val ? null : val }));
+  }
+  function clear() { setLocal(DEFAULT_FILTERS); }
+  function apply() { onApply(local); onClose(); }
+
+  const activeCount = countActiveFilters(local);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-bg-base border border-border w-full max-w-md rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex justify-between items-center p-5 border-b border-border bg-surface/50">
+          <div>
+            <h2 className="text-lg font-medium text-blue-400 flex items-center gap-2">
+              <SlidersHorizontal size={18} /> Filtros
+            </h2>
+            <p className="text-xs text-text-muted mt-1">Filtre as conversas por critérios específicos</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-text-muted hover:text-text-main transition-colors p-2 rounded-md hover:bg-surface-hover"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-6 space-y-5 overflow-y-auto max-h-[60vh]">
+          {/* Status */}
+          <div>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-stone-500 block mb-2.5">Status</span>
+            <div className="flex flex-wrap gap-2">
+              {STATUS_OPTIONS.map(opt => (
+                <FilterChip
+                  key={String(opt.value)}
+                  label={opt.label}
+                  active={local.status === opt.value}
+                  onClick={() => toggleStatus(opt.value)}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Priority */}
+          <div>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-stone-500 block mb-2.5">Prioridade</span>
+            <div className="flex flex-wrap gap-2">
+              {PRIORITY_OPTIONS.map(opt => (
+                <FilterChip
+                  key={String(opt.value)}
+                  label={opt.label}
+                  active={local.priority === opt.value}
+                  onClick={() => togglePriority(opt.value)}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Attendance */}
+          <div>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-stone-500 block mb-2.5">Atendimento</span>
+            <div className="flex flex-wrap gap-2">
+              {ATTENDANCE_OPTIONS.map(opt => (
+                <FilterChip
+                  key={String(opt.value)}
+                  label={opt.label}
+                  active={local.attendance === opt.value}
+                  onClick={() => toggleAttendance(opt.value)}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Agent */}
+          {agents.length > 0 && (
+            <div>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-stone-500 block mb-2.5">Agente</span>
+              <div className="flex flex-wrap gap-2">
+                {agents.map(agent => (
+                  <FilterChip
+                    key={agent.id}
+                    label={agent.name.split(' ')[0]}
+                    active={local.agent === agent.id}
+                    onClick={() => toggleAgent(agent.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-5 border-t border-border flex justify-between items-center">
+          <button
+            onClick={clear}
+            className="flex items-center gap-1.5 text-sm text-stone-500 hover:text-red-400 transition-colors"
+          >
+            <X size={13} /> Limpar filtros
+          </button>
+          <button
+            onClick={apply}
+            className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors"
+          >
+            Aplicar
+            {activeCount > 0 && (
+              <span className="bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
+                {activeCount}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── ConversationList ──────────────────────────────────────────────────────────
 
 export const ConversationList: React.FC<ConversationListProps> = ({
   conversations,
@@ -80,8 +232,9 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   setAdvancedFilters,
   onNewConversation,
   currentUserId,
+  agents,
 }) => {
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
   const unreadCount = allConversations.filter((c) => c.unread_count > 0).length;
   const teamCount = allConversations.filter(
@@ -95,26 +248,6 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     { id: 'mine',   label: 'Minhas' },
     { id: 'team',   label: 'Minha equipe', count: teamCount },
   ];
-
-  function toggleAdvanced() {
-    setShowAdvanced((v) => !v);
-  }
-
-  function clearAdvanced() {
-    setAdvancedFilters(DEFAULT_FILTERS);
-  }
-
-  function setStatus(val: AdvancedFilters['status']) {
-    setAdvancedFilters({ ...advancedFilters, status: advancedFilters.status === val ? null : val });
-  }
-
-  function setPriority(val: AdvancedFilters['priority']) {
-    setAdvancedFilters({ ...advancedFilters, priority: advancedFilters.priority === val ? null : val });
-  }
-
-  function setAttendance(val: AdvancedFilters['attendance']) {
-    setAdvancedFilters({ ...advancedFilters, attendance: advancedFilters.attendance === val ? null : val });
-  }
 
   return (
     <div className="w-full sm:w-[300px] lg:w-[340px] sm:min-w-[260px] sm:max-w-[340px] sm:shrink-0 flex flex-col h-full border-r border-border bg-background">
@@ -140,9 +273,9 @@ export const ConversationList: React.FC<ConversationListProps> = ({
               <MessageSquarePlus size={16} />
             </button>
             <button
-              onClick={toggleAdvanced}
+              onClick={() => setShowFilters(true)}
               className={`relative w-8 h-8 flex items-center justify-center rounded-lg border transition-all ${
-                showAdvanced || activeAdvancedCount > 0
+                activeAdvancedCount > 0
                   ? 'bg-blue-500/10 border-blue-500/25 text-blue-400'
                   : 'text-stone-500 hover:text-primary hover:bg-surface border-transparent'
               }`}
@@ -210,73 +343,6 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             </button>
           ))}
         </div>
-
-        {/* Advanced filters panel */}
-        {showAdvanced && (
-          <div className="mt-3 pt-3 border-t border-border space-y-3">
-            {/* Status */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-mono uppercase tracking-widest text-stone-600">Status</span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {STATUS_OPTIONS.map((opt) => (
-                  <FilterChip
-                    key={opt.value}
-                    label={opt.label}
-                    active={advancedFilters.status === opt.value}
-                    onClick={() => setStatus(opt.value)}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Priority */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-mono uppercase tracking-widest text-stone-600">Prioridade</span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {PRIORITY_OPTIONS.map((opt) => (
-                  <FilterChip
-                    key={opt.value}
-                    label={opt.label}
-                    active={advancedFilters.priority === opt.value}
-                    onClick={() => setPriority(opt.value)}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Attendance mode */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-mono uppercase tracking-widest text-stone-600">Atendimento</span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {ATTENDANCE_OPTIONS.map((opt) => (
-                  <FilterChip
-                    key={opt.value}
-                    label={opt.label}
-                    active={advancedFilters.attendance === opt.value}
-                    onClick={() => setAttendance(opt.value)}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Clear button */}
-            {activeAdvancedCount > 0 && (
-              <button
-                onClick={clearAdvanced}
-                className="flex items-center gap-1 text-[11px] text-stone-500 hover:text-red-400 transition-colors"
-              >
-                <X size={11} />
-                Limpar filtros
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
       {/* ── List ───────────────────────────────────────────────────────── */}
@@ -285,9 +351,9 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           Array.from({ length: 6 }).map((_, i) => (
             <div
               key={i}
-              className="flex items-start gap-3 px-4 py-3.5 border-b border-border animate-pulse"
+              className="flex items-start gap-3 px-4 py-4 border-b border-border animate-pulse"
             >
-              <div className="w-9 h-9 rounded-full bg-surface shrink-0" />
+              <div className="w-10 h-10 rounded-full bg-surface shrink-0" />
               <div className="flex-1 space-y-2 pt-0.5">
                 <div className="h-3.5 bg-surface rounded w-2/5" />
                 <div className="h-3 bg-surface/60 rounded w-full" />
@@ -334,6 +400,15 @@ export const ConversationList: React.FC<ConversationListProps> = ({
           )}
         </div>
       )}
+
+      {/* ── Filters Modal ───────────────────────────────────────────────── */}
+      <FiltersModal
+        isOpen={showFilters}
+        onClose={() => setShowFilters(false)}
+        current={advancedFilters}
+        onApply={setAdvancedFilters}
+        agents={agents}
+      />
     </div>
   );
 };
