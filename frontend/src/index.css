@@ -162,6 +162,77 @@
   animation: cardIn 0.4s ease-out both;
 }
 
+/* ─── Task list card entrance (more subtle, spring easing) ─── */
+@keyframes taskCardIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.task-card-animate {
+  animation: taskCardIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes subtlePop {
+  0% { transform: scale(0.96); opacity: 0.72; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.activity-count-pop {
+  animation: subtlePop 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.activity-review-pop {
+  animation: subtlePop 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.activity-card-sheen {
+  position: relative;
+  overflow: hidden;
+}
+
+.activity-card-sheen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(420px circle at 18% 0%, rgba(255, 255, 255, 0.09), transparent 42%),
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.035), transparent);
+  transition: opacity 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.activity-card-sheen:hover::before,
+.activity-card-sheen:focus-visible::before {
+  opacity: 1;
+}
+
+.dark .activity-card-sheen::before {
+  background:
+    radial-gradient(420px circle at 18% 0%, rgba(255, 255, 255, 0.08), transparent 42%),
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.03), transparent);
+}
+
+.activity-scroll-mask {
+  mask-image: linear-gradient(90deg, transparent 0, black 16px, black calc(100% - 16px), transparent 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-animate,
+  .task-card-animate,
+  .activity-count-pop,
+  .activity-review-pop {
+    animation: none !important;
+  }
+  .activity-card-sheen::before {
+    display: none;
+  }
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
 /* Dark mode deeper shadows */
 .dark .sidebar-tooltip {
   box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.4), 0 4px 8px -4px rgba(0, 0, 0, 0.2);
@@ -173,4 +244,63 @@
   visibility: visible;
   transform: translateY(-50%) translateX(0px) scale(1);
   transition-delay: 400ms;
+}
+
+/* ─── Mission Control animations ─── */
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+.progress-shimmer {
+  background: linear-gradient(90deg, #f59e0b 0%, #fb923c 40%, #fbbf24 60%, #f59e0b 100%);
+  background-size: 200% auto;
+  animation: shimmer 2.4s linear infinite;
+}
+
+@keyframes livePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(244,63,94,0.5); }
+  50%       { box-shadow: 0 0 0 6px rgba(244,63,94,0); }
+}
+.pulse-rose { animation: livePulse 2s ease-in-out infinite; }
+
+@keyframes typingDot {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30%            { opacity: 1;    transform: translateY(-3px); }
+}
+.typing-dot { animation: typingDot 1.4s ease-in-out infinite; }
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes flowDot {
+  0%   { top: 0%;   opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+.flow-dot { animation: flowDot 2.4s ease-in-out infinite; }
+.flow-dot:nth-child(2) { animation-delay: 0.8s; }
+.flow-dot:nth-child(3) { animation-delay: 1.6s; }
+
+@keyframes spinHalo {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.spin-halo { animation: spinHalo 4s linear infinite; }
+
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.count-up-in { animation: countUp 0.5s cubic-bezier(0.16,1,0.3,1) both; }
+
+@keyframes bentoIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.bento-card-animate { animation: bentoIn 0.45s cubic-bezier(0.16,1,0.3,1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-shimmer { animation: none; background: #f59e0b; }
+  .pulse-rose, .typing-dot, .flow-dot, .spin-halo,
+  .count-up-in, .bento-card-animate { animation: none !important; }
 }

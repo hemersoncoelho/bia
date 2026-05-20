@@ -69,8 +69,8 @@ export const PeriodFilter: React.FC<PeriodFilterProps> = ({
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-2">
       <div className="flex items-center gap-1.5">
-        <Calendar size={13} className="text-zinc-500 shrink-0" />
-        <div className="flex items-center gap-0.5 sm:gap-1 p-1 rounded-lg bg-zinc-100 dark:bg-white/[0.04] border border-zinc-200 dark:border-white/[0.06]">
+        <Calendar size={13} className="text-stone-500 shrink-0" />
+        <div className="flex items-center gap-0.5 sm:gap-1 p-1 rounded-lg bg-stone-100 dark:bg-white/[0.04] border border-stone-200 dark:border-white/[0.06]">
           {periods.map(p => (
             <button
               key={p}
@@ -78,8 +78,8 @@ export const PeriodFilter: React.FC<PeriodFilterProps> = ({
               className={cn(
                 'px-2 sm:px-3 py-1 text-[10px] sm:text-[11px] font-mono uppercase tracking-wider rounded-md transition-all duration-150',
                 value === p
-                  ? 'bg-white dark:bg-white/10 text-zinc-900 dark:text-white border border-zinc-200 dark:border-white/20 shadow-sm'
-                  : 'text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-white/50 dark:hover:bg-white/5'
+                  ? 'bg-white dark:bg-white/10 text-stone-900 dark:text-white border border-stone-300 dark:border-white/20 shadow'
+                  : 'text-stone-600 dark:text-zinc-500 hover:text-stone-800 dark:hover:text-zinc-300 hover:bg-white/70 dark:hover:bg-white/5'
               )}
             >
               {p === 'custom' ? 'Período' : PERIOD_LABELS[p]}
@@ -94,14 +94,14 @@ export const PeriodFilter: React.FC<PeriodFilterProps> = ({
             type="date"
             value={customRange?.from?.substring(0, 10) ?? ''}
             onChange={e => handleFromChange(e.target.value)}
-            className="text-[11px] font-mono px-2 py-1 rounded-md bg-white dark:bg-white/[0.06] border border-zinc-200 dark:border-white/[0.10] text-zinc-700 dark:text-zinc-300 outline-none focus:border-orange-400 transition-colors"
+            className="text-[11px] font-mono px-2 py-1 rounded-md bg-white dark:bg-white/[0.06] border border-stone-200 dark:border-white/[0.10] text-stone-700 dark:text-zinc-300 outline-none focus:border-orange-400 transition-colors"
           />
-          <span className="text-[10px] text-zinc-500 font-mono">até</span>
+          <span className="text-[10px] text-stone-500 font-mono">até</span>
           <input
             type="date"
             value={customRange?.to?.substring(0, 10) ?? ''}
             onChange={e => handleToChange(e.target.value)}
-            className="text-[11px] font-mono px-2 py-1 rounded-md bg-white dark:bg-white/[0.06] border border-zinc-200 dark:border-white/[0.10] text-zinc-700 dark:text-zinc-300 outline-none focus:border-orange-400 transition-colors"
+            className="text-[11px] font-mono px-2 py-1 rounded-md bg-white dark:bg-white/[0.06] border border-stone-200 dark:border-white/[0.10] text-stone-700 dark:text-zinc-300 outline-none focus:border-orange-400 transition-colors"
           />
         </div>
       )}

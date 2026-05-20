@@ -56,14 +56,21 @@ Três contextos globais envolvem o app em `main.tsx`:
 Sempre use `TenantContext.currentCompany.id` para obter o ID da empresa ativa — nunca use um ID hardcoded ou derivado da URL.
 
 ### Roteamento e Guards
-Definidos em `frontend/src/routes/AppRoutes.tsx`. Páginas pesadas são carregadas com lazy load via `React.lazy` + `Suspense` (fallback PageSkeleton). Componentes guard em `routes/Guards.tsx`:
+Definidos em `frontend/src/routes/AppRoutes.tsx`. Páginas pesadas são carregadas com lazy load via `React.lazy` + `Suspense` (fallback PageSkeleton). Guards divididos em dois arquivos:
+
+`routes/Guards.tsx`:
 - `<ProtectedRoute>` — exige sessão válida
 - `<ProtectedRoute allowedRoles={[...]}>` — seções restritas por papel
+- `<PublicRoute>` — redireciona usuário autenticado para `/`
+
+`components/RouteGuardForAgent.tsx`:
 - `<AgentRestrictedRoute>` — bloqueia o papel `agent` em determinadas páginas
+- `<IndexRedirect>` — redireciona `/` para `home` ou `dashboard` baseado no papel
 
 ### Organização de Componentes
 - `components/ui/` — primitivos reutilizáveis (botões, modais, inputs)
 - `components/Inbox/`, `components/Pipeline/`, `components/AiAgents/`, etc. — componentes agrupados por feature
+- `components/ErrorBoundary.tsx` — Error boundary React de catch-all; exibe tela de erro com botão "Tentar novamente"
 - `lib/utils.ts` exporta `cn(...classes)` (clsx + tailwind-merge) — use para todas as classes condicionais do Tailwind
 - Tipos TypeScript centralizados em `src/types.ts`
 
@@ -84,7 +91,7 @@ Seção `/admin` acessível apenas para `system_admin` e `platform_admin`. Usa `
 
 O `UsersList` inclui modal de criação de usuário que chama a Edge Function `create-platform-user` — exige vínculo com uma empresa obrigatoriamente.
 
-`CompaniesList` exibe métricas de cada tenant (plano de assinatura, status, MRR acumulado) e permite gestão de `company_subscriptions`. `CompanyDetails` inclui painel de assinatura com troca de plano, histórico de status e ações de churn/suspensão.
+`CompaniesList` exibe métricas de cada tenant (plano de assinatura, status, MRR acumulado) e permite gestão de `company_subscriptions`. Usa `NewCompanyModal` (`components/admin/NewCompanyModal.tsx`) para criar novas empresas diretamente pelo painel. `CompanyDetails` inclui painel de assinatura com troca de plano, histórico de status e ações de churn/suspensão.
 
 ### Compatibilidade Vite/OXC
 O Vite 8 usa o parser OXC que é mais restrito que o `tsc`:
@@ -135,6 +142,11 @@ Localizadas em `supabase/functions/`. Cada função:
 | `rpc_cancel_appointment` | Cancela agendamento com `cancellation_reason` (SECURITY DEFINER) |
 | `rpc_reschedule_appointment` | Remarca agendamento criando novo e linkando via `rescheduled_from_id` (SECURITY DEFINER) |
 | `rpc_update_appointment_status` | Atualiza `status` de um agendamento com validação de tenant (SECURITY DEFINER) |
+| `rpc_ai_edit_deal` | Edita título, valor e/ou `expected_close_date` de um deal (SECURITY DEFINER — chamado pelo n8n via MCP; `anon`+`authenticated` podem executar) |
+| `rpc_ai_transfer_attendance` | Transfere conversa para humano atomicamente: muda `attendance_mode`, limpa `ai_agent_id`, atribui `team_id`/`agent_id` e enfileira mensagem de aviso (SECURITY DEFINER; `anon`+`authenticated`) |
+| `rpc_ai_get_assets` | Retorna assets de mídia de uma tool do agente para o n8n enviar via UAZAPI (SECURITY DEFINER; `anon`+`authenticated`) |
+| `rpc_n8n_set_attendance_mode` | Altera `attendance_mode` de uma conversa e insere mensagem interna de auditoria — **apenas `service_role`** |
+| `rpc_n8n_update_deal_stage` | Move deal aberto para outro estágio do mesmo pipeline, com validação de tenant — **apenas `service_role`** |
 
 ### Principais Tabelas do Banco
 | Tabela | Propósito |
@@ -156,7 +168,7 @@ Localizadas em `supabase/functions/`. Cada função:
 | `schedules` | Horário de funcionamento por empresa e dia da semana (`company_id`, `weekday` 0–6, `opens_at`, `closes_at`, `is_active`) |
 | `service_types` | Tipos de serviço/procedimento por empresa (`name`, `duration_minutes` NOT NULL, `is_active`) — **exclusivo do módulo Agenda** |
 | `appointments` | Agendamentos do módulo Agenda (`scheduled_at`, `ends_at`, `status`, `rescheduled_from_id`) |
-| `product_catalog` | Catálogo comercial consultável pelo agente de IA (`name`, `description`, `duration_minutes` nullable, `price` nullable, `is_active`, `sort_order`) — **separado de `service_types`** |
+| `product_catalog` | Catálogo comercial consultável pelo agente de IA (`name`, `description`, `duration_minutes` nullable, `price` nullable, `is_active`, `sort_order`, `service_type_id` nullable FK→`service_types`) — **separado de `service_types`** |
 | `subscription_plans` | Catálogo de planos de assinatura da plataforma (`name`, `price_monthly`, `is_active`) |
 | `company_subscriptions` | Plano ativo por tenant (`plan_id`, `status`: trial/active/churned/suspended, `trial_ends_at`, `churn_reason`) |
 
@@ -243,6 +255,9 @@ O sistema de ferramentas tem três camadas:
 
 | Componente | Propósito |
 |------------|-----------|
+| `AgentCard` | Card de listagem do agente na página `/ai-agents` (nome, status, provider) |
+| `AgentForm` | Formulário de criação/edição do agente (nome, model, provider, system_prompt, handoff) |
+| `AgentTestPanel` | Painel de teste inline com simulação de resposta local (sem chamada real ao LLM) |
 | `AgentToolGrid` | Grid 2 colunas com cards de tools, toggle on/off |
 | `AgentToolDrawer` | Painel lateral de configuração (abre ao clicar no card) |
 | `AgentToolConfigForm` | Renderiza campos declarativos do `config_schema.fields` |
@@ -276,11 +291,13 @@ const notifyCount = useCallback((list) => { onCountChangeRef.current(...); }, []
 - `agent_tools_003.sql` — campos dinâmicos (`fields` no config_schema)
 - `agent_tools_004_assets.sql` — assets de mídia
 - `agent_tools_005_product_catalog.sql` — tabela `product_catalog` + tool `buscar_produtos_servicos` + tipo `catalog_action`
+- `agent_tools_006_product_catalog_service_link.sql` — adiciona `service_type_id` nullable em `product_catalog` para o agente saber qual service_type usar ao verificar slots e criar agendamentos
 
 **`service_types` vs `product_catalog`:**
 - `service_types.duration_minutes` é `NOT NULL CHECK (> 0)` — obrigatório para agenda calcular slots. **Nunca alterar esta constraint** — quebra `rpc_get_available_slots`.
 - `product_catalog.duration_minutes` é nullable — catálogo comercial sem exigência de duração.
-- Não misturar: agenda usa `service_types`, agente de IA usa `product_catalog`.
+- `product_catalog.service_type_id` (nullable FK) — elo entre o catálogo e o módulo de agenda. Quando preenchido, o agente usa esse `service_type_id` diretamente ao chamar `buscar_agenda` ou `agendar`.
+- Não misturar os dois módulos: agenda usa `service_types`, agente de IA usa `product_catalog`.
 
 Agentes de IA são configurados por empresa na tabela `ai_agents` e orquestrados via n8n:
 
@@ -306,7 +323,11 @@ Quatro workflows formam o pipeline completo (exports JSON na raiz do projeto):
 | `[Sia One] [Outbound - Human].json` | Outbound - Human | Envia mensagem de agente humano via UAZAPI e persiste via `rpc_save_human_message` |
 
 **Resolução dinâmica de `company_id` no n8n:**
-O n8n não carrega JWT de usuário. Para identificar a empresa, usa `rpc_resolve_company_by_token(instance_token)` — todas as RPCs usadas pelo n8n são `SECURITY DEFINER` e concedem `EXECUTE` para `anon`.
+O n8n não carrega JWT de usuário. Para identificar a empresa, usa `rpc_resolve_company_by_token(instance_token)`.
+
+**Dois padrões de credencial para RPCs do n8n:**
+- RPCs de lookup/leitura (`rpc_resolve_company_by_token`, `rpc_get_active_ai_agent`, `rpc_ai_edit_deal`, `rpc_ai_transfer_attendance`, `rpc_ai_get_assets`) — `GRANT` para `anon`+`authenticated`; o n8n pode usar anon key
+- RPCs de escrita sensível (`rpc_n8n_set_attendance_mode`, `rpc_n8n_update_deal_stage`, `rpc_save_ai_message`, `rpc_save_human_message`) — **apenas `service_role`**; o n8n deve usar service_role key
 
 **Fluxo do IA - Comercial:**
 1. Acionado pelo workflow buffer com `{ role, content, company_id, message, sender_name }`
@@ -344,7 +365,7 @@ As migrações em `frontend/supabase-migrations/SECURITY_0*.sql` corrigiram vuln
 
 ## Módulo: Dashboard Comercial (Visão Comercial)
 
-Página principal do painel do tenant. Arquivo único em `frontend/src/pages/Dashboard.tsx` (~1500 linhas).
+Página principal do painel do tenant. Arquivo principal em `frontend/src/pages/Dashboard.tsx`. Componente externo extraído: `components/Dashboard/KpiCard.tsx` — card de KPI reutilizável com `title`, `value`, `icon`, `trend` e `trendUp`.
 
 ### Sub-componentes internos (definidos no próprio arquivo)
 
@@ -372,10 +393,10 @@ Página principal do painel do tenant. Arquivo único em `frontend/src/pages/Das
 
 | Fetch | Dados | Loading state |
 |-------|-------|---------------|
-| `fetchKPIs` | Mensagens, Leads, Conversas abertas, Leads qualificados, Tarefas atrasadas | `loading` |
+| `fetchKPIs` | Mensagens, Leads, Conversas abertas, Leads qualificados, Tarefas atrasadas, **Agendamentos concluídos** | `loading` |
 | `fetchCharts` | Conversas por canal, Tarefas por status, Conversas por prioridade | `chartsLoading` |
 | `fetchCommercial` | Pipeline value, Won value, Lost count, Deals por etapa | `commercialLoading` |
-| `fetchTrend` | Série temporal diária (usa `v_kpi_company_daily` ou fallback direto em `deals`) | `trendLoading` |
+| `fetchTrend` | Série temporal diária com coorte de deals — inclui `newLeads` por dia (usa `v_kpi_company_daily` ou fallback direto em `deals`) | `trendLoading` |
 | `fetchAnalytics` | Funil de conversão por etapa, Performance por agente | `analyticsLoading` |
 
 ### Biblioteca de gráficos
@@ -402,9 +423,11 @@ Activity, TrendingUp, Mail, Users, Layers
 
 ### Seletor de período
 Componente separado em `frontend/src/components/Dashboard/PeriodFilter.tsx`:
-- Tipos: `'today' | '7d' | '30d' | '90d'`
-- Exporta `periodToStartDate(period): string` — retorna ISO datetime do início do período
+- Tipos: `'today' | '7d' | '30d' | '90d' | 'custom'`
+- Interface `CustomRange { from: string; to: string }` — ISO datetimes do intervalo personalizado
+- `periodToStartDate(period)` só aceita `Exclude<Period, 'custom'>` — para `'custom'` use `customRange.from`/`customRange.to` diretamente
 - Filtro "Este Mês" (`30d`) usa início do mês corrente, não exatamente 30 dias atrás
+- Ao selecionar `'custom'`, o componente exibe dois `<input type="date">` e chama `onCustomRangeChange(range)`. O Dashboard mantém `CustomRange | null` em estado e só dispara os fetches quando `customRange` está preenchido
 
 ## Módulo: Agenda
 

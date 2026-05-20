@@ -71,6 +71,15 @@ export interface StageSummary {
 
 // ===== TASKS =====
 export type TaskStatus = 'open' | 'in_progress' | 'done' | 'cancelled';
+export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent';
+export type TaskSourceType =
+  | 'manual'
+  | 'ai'
+  | 'followup_trigger'
+  | 'cadence'
+  | 'appointment'
+  | 'inbox'
+  | 'system';
 
 export interface Task {
   id: string;
@@ -79,14 +88,168 @@ export interface Task {
   description?: string;
   due_at?: string;
   status: TaskStatus;
+  priority?: TaskPriority;
+  source_type?: TaskSourceType;
+  source_id?: string;
   assigned_to?: string;
   assigned_to_name?: string;
+  assigned_agent_id?: string;
   contact_id?: string;
   contact_name?: string;
   conversation_id?: string;
   deal_id?: string;
   deal_name?: string;
+  ai_generated?: boolean;
+  ai_confidence?: number;
+  ai_reason?: string;
+  recommended_message?: string;
+  metadata?: Record<string, unknown>;
+  created_by?: string;
   created_at: string;
+  updated_at?: string;
+}
+
+// ===== FOLLOWUP TRIGGERS =====
+export type FollowupTriggerStatus =
+  | 'pending'
+  | 'cancelled'
+  | 'due'
+  | 'processed'
+  | 'skipped'
+  | 'failed';
+
+export type FollowupTriggerType =
+  | 'no_response_after_ai_question'
+  | 'no_response_after_human_message'
+  | 'third_party_decision_followup'
+  | 'asked_to_return_later'
+  | 'qualification_abandoned'
+  | 'post_quote_followup';
+
+export interface ConversationFollowupTrigger {
+  id: string;
+  company_id: string;
+  contact_id: string;
+  conversation_id: string;
+  trigger_type: FollowupTriggerType;
+  status: FollowupTriggerStatus;
+  expected_reply_until: string;
+  created_from_message_id?: number;
+  last_inbound_message_at_snapshot?: string;
+  last_outbound_message_at_snapshot?: string;
+  detected_event?: string;
+  reason?: string;
+  recommended_action?: string;
+  recommended_message?: string;
+  ai_confidence?: number;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+  updated_at?: string;
+  processed_at?: string;
+  cancelled_at?: string;
+  cancelled_reason?: string;
+}
+
+// ===== AI FOLLOWUP DECISIONS =====
+export type AiFollowupDecisionStatus =
+  | 'pending'
+  | 'accepted'
+  | 'rejected'
+  | 'converted_to_task'
+  | 'converted_to_execution'
+  | 'ignored'
+  | 'failed';
+
+export interface AiFollowupDecision {
+  id: string;
+  company_id: string;
+  contact_id: string;
+  conversation_id: string;
+  followup_trigger_id?: string;
+  detected_event?: string;
+  recommended_action?: string;
+  recommended_message?: string;
+  suggested_due_at?: string;
+  confidence?: number;
+  requires_human_approval?: boolean;
+  status: AiFollowupDecisionStatus;
+  raw_input?: Record<string, unknown>;
+  raw_output?: Record<string, unknown>;
+  created_at: string;
+  updated_at?: string;
+}
+
+// ===== CADENCES =====
+
+export type CadenceStatus = 'draft' | 'active' | 'paused' | 'archived';
+
+export type CadenceTriggerType =
+  | 'appointment_scheduled'
+  | 'appointment_rescheduled'
+  | 'appointment_cancelled'
+  | 'no_response'
+  | 'manual';
+
+export type CadenceCategory =
+  | 'agendamento'
+  | 'qualificacao'
+  | 'pos_orcamento'
+  | 'reativacao'
+  | 'pos_atendimento'
+  | 'personalizada';
+
+export type CadenceActionType =
+  | 'whatsapp_message'
+  | 'create_task'
+  | 'notify_user';
+
+export interface CadenceStep {
+  id: string;
+  company_id: string;
+  cadence_template_id: string;
+  step_order: number;
+  name: string;
+  action_type: CadenceActionType;
+  relative_to?: string;
+  offset_minutes?: number;
+  message_template_id?: string;
+  message_text?: string;
+  media_asset_id?: string;
+  requires_approval: boolean;
+  is_active: boolean;
+  settings?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CadenceTemplate {
+  id: string;
+  company_id: string;
+  name: string;
+  description?: string;
+  category: CadenceCategory;
+  trigger_type: CadenceTriggerType;
+  status: CadenceStatus;
+  settings?: Record<string, unknown>;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+  step_count?: number;
+  steps?: CadenceStep[];
+}
+
+export interface MessageTemplate {
+  id: string;
+  company_id: string;
+  name: string;
+  channel: string;
+  body: string;
+  variables?: Record<string, unknown>;
+  media_asset_id?: string;
+  status: 'active' | 'draft' | 'archived';
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // ===== NOTES =====

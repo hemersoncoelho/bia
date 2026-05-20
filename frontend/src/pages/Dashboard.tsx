@@ -174,18 +174,18 @@ const ProfoundTooltip = ({ active, payload, label }: any) => {
     : null;
   return (
     <div
-      className="border border-white/10 rounded-xl px-4 py-3 shadow-2xl min-w-[160px]"
-      style={{ background: 'rgba(8,8,8,0.96)', backdropFilter: 'blur(8px)' }}
+      className="border border-stone-200 dark:border-white/10 rounded-xl px-4 py-3 shadow-lg min-w-[160px] bg-white/95 dark:bg-zinc-950/95"
+      style={{ backdropFilter: 'blur(8px)' }}
     >
-      {label && <p className="text-zinc-400 text-xs font-medium mb-2.5">{label}</p>}
+      {label && <p className="text-stone-500 dark:text-zinc-400 text-xs font-medium mb-2.5">{label}</p>}
       <div className="space-y-1.5">
         {payload.map((p: any, i: number) => (
           <div key={i} className="flex items-center justify-between gap-6">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: p.color || p.fill }} />
-              <span className="text-zinc-400 text-xs">{p.name}</span>
+              <span className="text-stone-500 dark:text-zinc-400 text-xs">{p.name}</span>
             </div>
-            <span className="text-white font-semibold text-xs">
+            <span className="text-stone-900 dark:text-white font-semibold text-xs">
               {hasCurrency ? fmt(Number(p.value)) : p.value}
             </span>
           </div>
@@ -193,10 +193,10 @@ const ProfoundTooltip = ({ active, payload, label }: any) => {
       </div>
       {total !== null && (
         <>
-          <div className="h-px bg-white/10 my-2" />
+          <div className="h-px bg-stone-200 dark:bg-white/10 my-2" />
           <div className="flex items-center justify-between">
-            <span className="text-zinc-500 text-xs">Total</span>
-            <span className="text-white font-bold text-xs">{fmt(total)}</span>
+            <span className="text-stone-400 dark:text-zinc-500 text-xs">Total</span>
+            <span className="text-stone-900 dark:text-white font-bold text-xs">{fmt(total)}</span>
           </div>
         </>
       )}
@@ -207,9 +207,9 @@ const ProfoundTooltip = ({ active, payload, label }: any) => {
 // ── HeroPill ─────────────────────────────────────────────────────
 
 const HERO_PILL_THEMES = {
-  emerald: 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400',
-  rose:    'bg-rose-500/10    border-rose-500/25    text-rose-400',
-  blue:    'bg-cyan-500/10    border-cyan-500/25    text-cyan-400',
+  emerald: 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/25 text-emerald-700 dark:text-emerald-400',
+  rose:    'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/25 text-rose-700 dark:text-rose-400',
+  blue:    'bg-blue-50 dark:bg-cyan-500/10 border-blue-200 dark:border-cyan-500/25 text-blue-700 dark:text-cyan-400',
 };
 
 const HeroPill: React.FC<{
@@ -256,20 +256,20 @@ const StatCard: React.FC<{
     ? 'text-emerald-400'
     : trendDir === 'down'
       ? 'text-rose-400'
-      : 'text-zinc-500';
+      : 'text-stone-400';
 
   if (loading) {
     return (
       <div
-        className="card-animate rounded-2xl border border-white/[0.06] bg-white/[0.025] animate-pulse h-[120px]"
+        className="card-animate rounded-2xl border border-[#E7E5E4] dark:border-white/[0.06] bg-white dark:bg-white/[0.025] animate-pulse h-[120px]"
         style={{ animationDelay: `${delay}ms` }}
       >
         <div className="p-5 space-y-3">
           <div className="flex justify-between">
-            <div className="h-2 bg-white/[0.05] rounded w-24" />
-            <div className="w-8 h-8 bg-white/[0.05] rounded-lg" />
+            <div className="h-2 bg-stone-100 dark:bg-white/[0.06] rounded w-24" />
+            <div className="w-8 h-8 bg-stone-100 dark:bg-white/[0.06] rounded-lg" />
           </div>
-          <div className="h-8 bg-white/[0.04] rounded w-20 mt-4" />
+          <div className="h-8 bg-stone-50 dark:bg-white/[0.03] rounded w-20 mt-4" />
         </div>
       </div>
     );
@@ -277,19 +277,19 @@ const StatCard: React.FC<{
 
   const isZero     = typeof value === 'number' && value === 0;
   const valueColor = isZero
-    ? 'text-zinc-600'
-    : 'text-white';
-  const iconBg     = ACCENT_BG[accent] ?? 'bg-white/5';
+    ? 'text-stone-400 dark:text-zinc-600'
+    : 'text-stone-900 dark:text-white';
+  const iconBg     = ACCENT_BG[accent] ?? 'bg-stone-100 dark:bg-white/[0.05]';
 
   return (
     <div
-      className="card-animate rounded-2xl border border-white/[0.06] bg-white/[0.025] hover:scale-[1.02] hover:border-white/[0.12] hover:bg-white/[0.04] transition-all duration-200 p-4 sm:p-5 flex flex-col gap-3 group cursor-default"
+      className="card-animate rounded-2xl border border-[#E7E5E4] dark:border-white/[0.06] bg-white dark:bg-white/[0.025] hover:scale-[1.02] hover:border-[#D6D3D1] dark:hover:border-white/[0.12] hover:bg-stone-50 dark:hover:bg-white/[0.04] transition-all duration-200 p-4 sm:p-5 flex flex-col gap-3 group cursor-default"
       style={{ animationDelay: `${delay}ms` }}
     >
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-zinc-500">{title}</p>
-          {subtitle && <p className="text-[10px] text-zinc-600 mt-0.5">{subtitle}</p>}
+          <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-stone-500 dark:text-zinc-500">{title}</p>
+          {subtitle && <p className="text-[10px] text-stone-400 dark:text-zinc-600 mt-0.5">{subtitle}</p>}
         </div>
         <div className={`p-2 rounded-xl shrink-0 ${accent} ${iconBg} transition-all duration-200 group-hover:scale-110`}>{icon}</div>
       </div>
@@ -323,11 +323,11 @@ const Panel: React.FC<{
   children: React.ReactNode;
   className?: string;
 }> = ({ title, subtitle, action, children, className = '' }) => (
-  <div className={`rounded-2xl border border-white/[0.06] bg-white/[0.025] p-5 flex flex-col gap-4 transition-colors duration-200 hover:border-white/[0.09] ${className}`}>
+  <div className={`rounded-2xl border border-[#E7E5E4] dark:border-white/[0.06] bg-white dark:bg-white/[0.025] p-5 flex flex-col gap-4 transition-colors duration-200 hover:border-[#D6D3D1] dark:hover:border-white/[0.12] ${className}`}>
     <div className="flex items-start justify-between gap-2">
       <div>
-        <h3 className="text-[10px] font-mono uppercase tracking-[0.15em] text-zinc-500">{title}</h3>
-        {subtitle && <p className="text-[10px] text-zinc-600 mt-0.5">{subtitle}</p>}
+        <h3 className="text-[10px] font-mono uppercase tracking-[0.15em] text-stone-500 dark:text-zinc-500">{title}</h3>
+        {subtitle && <p className="text-[10px] text-stone-400 dark:text-zinc-600 mt-0.5">{subtitle}</p>}
       </div>
       {action}
     </div>
@@ -349,19 +349,19 @@ const StageBar: React.FC<{
   const pct = totalCount > 0 ? Math.max(4, (count / totalCount) * 100) : 4;
   return (
     <div className="flex items-center gap-3 group">
-      <span className="text-[10px] text-zinc-400 dark:text-zinc-600 w-4 shrink-0 text-right font-mono">{rank}</span>
+      <span className="text-[10px] text-stone-400 dark:text-zinc-600 w-4 shrink-0 text-right font-mono">{rank}</span>
       <div className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1.5 gap-2">
-          <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">{label}</span>
+          <span className="text-xs font-medium text-stone-600 dark:text-zinc-300 truncate">{label}</span>
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-[10px] text-zinc-400 dark:text-zinc-600 font-mono">
+            <span className="text-[10px] text-stone-400 dark:text-zinc-600 font-mono">
               {count} negócio{count !== 1 ? 's' : ''}
             </span>
-            <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">{fmtShort(value)}</span>
+            <span className="text-xs font-semibold text-stone-900 dark:text-zinc-100">{fmtShort(value)}</span>
           </div>
         </div>
-        <div className="h-1.5 w-full bg-zinc-100 dark:bg-white/[0.05] rounded-full overflow-hidden">
+        <div className="h-1.5 w-full bg-stone-100 dark:bg-white/[0.05] rounded-full overflow-hidden">
           <div
             className="h-full rounded-full"
             style={{
@@ -405,13 +405,13 @@ const BarRow: React.FC<{
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1.5 gap-2">
-          <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">{label}</span>
+          <span className="text-xs font-medium text-stone-600 dark:text-zinc-300 truncate">{label}</span>
           <div className="flex items-center gap-3 shrink-0">
-            <span className="text-xs font-semibold text-zinc-900 dark:text-white tabular-nums">{count}</span>
-            <span className="text-[10px] text-zinc-400 dark:text-zinc-600 font-mono w-8 text-right tabular-nums">{pct}%</span>
+            <span className="text-xs font-semibold text-stone-900 dark:text-white tabular-nums">{count}</span>
+            <span className="text-[10px] text-stone-400 dark:text-zinc-600 font-mono w-8 text-right tabular-nums">{pct}%</span>
           </div>
         </div>
-        <div className="h-1.5 w-full bg-zinc-100 dark:bg-white/[0.05] rounded-full overflow-hidden">
+        <div className="h-1.5 w-full bg-stone-100 dark:bg-white/[0.05] rounded-full overflow-hidden">
           <div
             className="h-full rounded-full"
             style={{
@@ -441,24 +441,24 @@ const FunnelRow: React.FC<{
   const barReady = useBarAnimate();
   const openPct  = maxOpen > 0 ? Math.max(4, (openDeals / maxOpen) * 100) : 4;
   const convPct  = totalDeals > 0 ? Math.max(0, (wonDeals / totalDeals) * 100) : 0;
-  const rateColor = convRate === 0 ? 'text-rose-400' : convRate >= 50 ? 'text-emerald-400' : 'text-zinc-400';
+  const rateColor = convRate === 0 ? 'text-rose-400' : convRate >= 50 ? 'text-emerald-400' : 'text-stone-400';
   return (
     <div className="flex items-center gap-3">
-      <div className="w-5 h-5 rounded flex items-center justify-center text-[9px] font-mono text-zinc-500 dark:text-zinc-600 bg-zinc-100 dark:bg-white/[0.05] shrink-0">
+      <div className="w-5 h-5 rounded flex items-center justify-center text-[9px] font-mono text-stone-500 dark:text-zinc-600 bg-stone-100 dark:bg-white/[0.05] shrink-0">
         {rank}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1.5 gap-2">
-          <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">{name}</span>
+          <span className="text-xs font-medium text-stone-600 dark:text-zinc-300 truncate">{name}</span>
           <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-            <span className="text-[10px] text-zinc-400 dark:text-zinc-600 font-mono hidden sm:inline">{openDeals} abertos</span>
+            <span className="text-[10px] text-stone-400 dark:text-zinc-600 font-mono hidden sm:inline">{openDeals} abertos</span>
             <span className={`text-[10px] font-mono font-semibold ${rateColor}`}>{convRate}%</span>
-            <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">{fmtShort(openAmount)}</span>
+            <span className="text-xs font-semibold text-stone-900 dark:text-zinc-100">{fmtShort(openAmount)}</span>
           </div>
         </div>
-        <div className="relative h-1.5 w-full bg-zinc-100 dark:bg-white/[0.05] rounded-full overflow-hidden">
+        <div className="relative h-1.5 w-full bg-stone-100 dark:bg-white/[0.05] rounded-full overflow-hidden">
           <div
-            className="absolute inset-y-0 left-0 h-full rounded-full bg-blue-300 dark:bg-white/10"
+            className="absolute inset-y-0 left-0 h-full rounded-full bg-stone-200 dark:bg-white/10"
             style={{
               width: barReady ? `${openPct}%` : '0%',
               transition: 'width 700ms cubic-bezier(0.16, 1, 0.3, 1)',
@@ -494,11 +494,11 @@ const AgentRow: React.FC<{
   const barReady = useBarAnimate();
   const pct = maxAmount > 0 ? Math.max(4, (wonAmount / maxAmount) * 100) : 4;
   const color = AGENT_COLORS[colorIdx % AGENT_COLORS.length];
-  const rateColor = winRate >= 50 ? 'text-emerald-400' : winRate >= 25 ? 'text-amber-400' : 'text-zinc-500';
+  const rateColor = winRate >= 50 ? 'text-emerald-400' : winRate >= 25 ? 'text-amber-400' : 'text-stone-400';
   const initial = name.charAt(0).toUpperCase();
   return (
     <div className="flex items-center gap-3 group">
-      <span className="text-[10px] text-zinc-400 dark:text-zinc-600 w-4 shrink-0 text-right font-mono">{rank}</span>
+      <span className="text-[10px] text-stone-400 dark:text-zinc-600 w-4 shrink-0 text-right font-mono">{rank}</span>
       <div
         className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
         style={{ background: color + '33', border: `1.5px solid ${color}66` }}
@@ -507,16 +507,16 @@ const AgentRow: React.FC<{
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1.5 gap-2">
-          <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">{name}</span>
+          <span className="text-xs font-medium text-stone-600 dark:text-zinc-300 truncate">{name}</span>
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            <span className="text-[10px] text-zinc-400 dark:text-zinc-600 font-mono hidden sm:inline">{dealsWon}/{dealsTotal}</span>
+            <span className="text-[10px] text-stone-400 dark:text-zinc-600 font-mono hidden sm:inline">{dealsWon}/{dealsTotal}</span>
             <span className={`text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-full border ${rateColor} border-current/20 bg-current/5`}>
               {winRate}%
             </span>
-            <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">{fmtShort(wonAmount)}</span>
+            <span className="text-xs font-semibold text-stone-900 dark:text-zinc-100">{fmtShort(wonAmount)}</span>
           </div>
         </div>
-        <div className="h-1.5 w-full bg-zinc-100 dark:bg-white/[0.05] rounded-full overflow-hidden">
+        <div className="h-1.5 w-full bg-stone-100 dark:bg-white/[0.05] rounded-full overflow-hidden">
           <div
             className="h-full rounded-full"
             style={{
@@ -558,15 +558,15 @@ const UrgencySignal: React.FC<{
 // ── SkeletonPanel ─────────────────────────────────────────────────
 
 const SkeletonPanel = ({ h = 'h-56' }: { h?: string }) => (
-  <div className={`rounded-2xl border border-white/[0.06] bg-white/[0.025] p-5 animate-pulse ${h}`}>
+  <div className={`rounded-2xl border border-[#E7E5E4] dark:border-white/[0.06] bg-white dark:bg-white/[0.025] p-5 animate-pulse ${h}`}>
     <div className="flex justify-between items-start mb-4">
       <div>
-        <div className="h-2 bg-white/[0.05] rounded w-24 mb-2" />
-        <div className="h-1.5 bg-white/[0.03] rounded w-32" />
+        <div className="h-2 bg-stone-100 dark:bg-white/[0.06] rounded w-24 mb-2" />
+        <div className="h-1.5 bg-stone-50 dark:bg-white/[0.03] rounded w-32" />
       </div>
-      <div className="h-4 bg-white/[0.04] rounded w-16" />
+      <div className="h-4 bg-stone-100 dark:bg-white/[0.06] rounded w-16" />
     </div>
-    <div className="flex-1 h-36 bg-white/[0.04] rounded-xl" />
+    <div className="flex-1 h-36 bg-stone-100 dark:bg-white/[0.06] rounded-xl" />
   </div>
 );
 
@@ -864,7 +864,7 @@ export const Dashboard: React.FC = () => {
   const animatedPipeline = useCountUp(commercial?.pipelineValue ?? 0, 1000);
 
   if (!currentCompany) return (
-    <div className="p-8 text-zinc-500 font-mono uppercase text-xs tracking-widest text-center mt-20">
+    <div className="p-8 text-stone-500 font-mono uppercase text-xs tracking-widest text-center mt-20">
       Nenhuma empresa no contexto.
     </div>
   );
@@ -896,14 +896,14 @@ export const Dashboard: React.FC = () => {
       {/* ══════════════════════════════════════════════════════════
           HEADER — ETAPA 10
       ══════════════════════════════════════════════════════════ */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-zinc-200 dark:border-white/[0.06]">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-stone-200 dark:border-white/[0.06]">
         <div>
-          <span className="text-[10px] font-mono uppercase tracking-widest text-orange-500 dark:text-orange-400 block mb-1.5">
+          <span className="text-[10px] font-mono uppercase tracking-widest text-orange-500 block mb-1.5">
             Visão Comercial
           </span>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-zinc-900 dark:text-white flex items-baseline gap-2 sm:gap-3 flex-wrap">
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-stone-900 dark:text-white flex items-baseline gap-2 sm:gap-3 flex-wrap">
             Dashboard
-            <span className="text-zinc-400 dark:text-zinc-500 text-base sm:text-xl font-normal">{currentCompany.name}</span>
+            <span className="text-stone-400 dark:text-zinc-500 text-base sm:text-xl font-normal">{currentCompany.name}</span>
           </h1>
         </div>
         <PeriodFilter
@@ -918,11 +918,11 @@ export const Dashboard: React.FC = () => {
           ERRO
       ══════════════════════════════════════════════════════════ */}
       {error && (
-        <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 px-4 py-3 rounded-xl flex items-center justify-between text-sm">
+        <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl flex items-center justify-between text-sm">
           <div className="flex items-center gap-2"><AlertCircle size={16} />{error}</div>
           <button
             onClick={() => { fetchKPIs(period, customRange); fetchCharts(period, customRange); }}
-            className="text-xs font-mono px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 transition-colors"
+            className="text-xs font-mono px-3 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 transition-colors text-rose-700"
           >
             Tentar novamente
           </button>
@@ -932,42 +932,42 @@ export const Dashboard: React.FC = () => {
       {/* ══════════════════════════════════════════════════════════
           HERO BLOCK — ETAPA 2
       ══════════════════════════════════════════════════════════ */}
-      <div className="relative rounded-2xl overflow-hidden border border-blue-500/20 bg-gradient-to-br from-blue-950/40 via-[#0A0A0B]/60 to-[#0A0A0B]/80 p-6 lg:p-8">
+      <div className="relative rounded-2xl overflow-hidden border border-stone-200 dark:border-blue-500/20 bg-white dark:bg-transparent bg-gradient-to-br from-stone-50 dark:from-blue-950/40 via-white dark:via-[#0A0A0B]/60 to-white dark:to-[#0A0A0B]/80 p-6 lg:p-8">
         {/* Glow accent */}
-        <div className="absolute -top-40 -right-40 w-[28rem] h-[28rem] rounded-full bg-blue-600/[0.07] blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-1/3 w-64 h-32 bg-cyan-500/[0.04] blur-2xl pointer-events-none" />
+        <div className="absolute -top-40 -right-40 w-[28rem] h-[28rem] rounded-full bg-stone-100 dark:bg-blue-500/15 blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-1/3 w-64 h-32 bg-stone-50 dark:bg-sky-500/10 blur-2xl pointer-events-none" />
 
         <div className="relative flex flex-col lg:flex-row lg:items-center gap-6">
 
           {/* Left: main pipeline value */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <Zap size={12} className="text-blue-400 dark:text-blue-400" />
-              <p className="text-[10px] font-mono uppercase tracking-widest text-blue-500 dark:text-blue-400">
+              <Zap size={12} className="text-stone-500 dark:text-cyan-400" />
+              <p className="text-[10px] font-mono uppercase tracking-widest text-stone-500 dark:text-cyan-400">
                 Orçamento em Aberto
               </p>
             </div>
-            <p className="text-[10px] font-mono text-zinc-400 dark:text-zinc-600 mb-3">
+            <p className="text-[10px] font-mono text-stone-500 dark:text-zinc-500 mb-3">
               Negócios criados no período · {periodLabel}
             </p>
 
             {commercialLoading ? (
-              <div className="h-16 w-56 bg-white/[0.05] rounded-xl animate-pulse" />
+              <div className="h-16 w-56 bg-stone-100 dark:bg-blue-950/40 rounded-xl animate-pulse" />
             ) : (
               <>
                 <p
-                  className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white tabular-nums leading-none"
-                  style={{ filter: 'drop-shadow(0 0 32px rgba(34,211,238,0.35)) drop-shadow(0 0 12px rgba(34,211,238,0.2))' }}
+                  className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-stone-900 dark:text-white tabular-nums leading-none"
+                  style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.08))' }}
                 >
                   {fmtShort(animatedPipeline)}
                 </p>
                 {openDealCount > 0 && (
-                  <p className="text-sm text-zinc-400 mt-2 font-mono">
+                  <p className="text-sm text-stone-500 dark:text-zinc-400 mt-2 font-mono">
                     {openDealCount} negócio{openDealCount !== 1 ? 's' : ''} em aberto
                   </p>
                 )}
                 {openDealCount === 0 && !commercialLoading && (
-                  <p className="text-sm text-zinc-600 mt-2 font-mono">Nenhum negócio em aberto no período</p>
+                  <p className="text-sm text-stone-400 dark:text-zinc-500 mt-2 font-mono">Nenhum negócio em aberto no período</p>
                 )}
               </>
             )}
@@ -996,7 +996,7 @@ export const Dashboard: React.FC = () => {
                     dot={false}
                     activeDot={{ r: 4, fill: '#22D3EE', strokeWidth: 0 }}
                   />
-                  <Tooltip content={<ProfoundTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.06)', strokeWidth: 1 }} />
+                  <Tooltip content={<ProfoundTooltip />} cursor={{ stroke: 'rgba(0,0,0,0.08)', strokeWidth: 1 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -1006,9 +1006,9 @@ export const Dashboard: React.FC = () => {
           <div className="flex flex-wrap lg:flex-col gap-2 lg:shrink-0">
             {commercialLoading ? (
               <>
-                <div className="h-14 w-48 bg-white/[0.05] rounded-xl animate-pulse" />
-                <div className="h-14 w-48 bg-white/[0.04] rounded-xl animate-pulse" />
-                <div className="h-14 w-48 bg-white/[0.03] rounded-xl animate-pulse" />
+                <div className="h-14 w-48 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl animate-pulse" />
+                <div className="h-14 w-48 bg-blue-50 dark:bg-blue-500/10 rounded-xl animate-pulse" />
+                <div className="h-14 w-48 bg-rose-50 dark:bg-rose-500/10 rounded-xl animate-pulse" />
               </>
             ) : commercial ? (
               <>
@@ -1120,7 +1120,7 @@ export const Dashboard: React.FC = () => {
               action={
                 <Link
                   to="/deals"
-                  className="flex items-center gap-1 text-[10px] font-mono text-orange-500 dark:text-orange-400 hover:underline transition-colors shrink-0"
+                  className="flex items-center gap-1 text-[10px] font-mono text-orange-500 hover:underline transition-colors shrink-0"
                 >
                   ver negócios <ChevronRight size={10} />
                 </Link>
@@ -1130,18 +1130,18 @@ export const Dashboard: React.FC = () => {
                 <>
                   <ResponsiveContainer width="100%" height={230} debounce={50}>
                     <LineChart data={trend} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="2 6" stroke="rgba(255,255,255,0.04)" vertical={false} />
-                      <XAxis dataKey="date" tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                      <YAxis tickFormatter={fmtShort} tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} width={54} />
-                      <Tooltip content={<ProfoundTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.06)', strokeWidth: 1 }} />
+                      <CartesianGrid strokeDasharray="2 6" stroke="rgba(0,0,0,0.06)" vertical={false} />
+                      <XAxis dataKey="date" tick={{ fill: '#78716c', fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                      <YAxis tickFormatter={fmtShort} tick={{ fill: '#78716c', fontSize: 10 }} axisLine={false} tickLine={false} width={54} />
+                      <Tooltip content={<ProfoundTooltip />} cursor={{ stroke: 'rgba(0,0,0,0.08)', strokeWidth: 1 }} />
                       <Line
                         type="monotone"
                         dataKey="openPipelineAmount"
                         name="Orçamento Aberto"
-                        stroke="rgba(255,255,255,0.75)"
+                        stroke="#3B82F6"
                         strokeWidth={2}
-                        dot={{ r: 3, fill: 'rgba(255,255,255,0.75)', strokeWidth: 0 }}
-                        activeDot={{ r: 5, fill: '#ffffff', strokeWidth: 0 }}
+                        dot={{ r: 3, fill: '#3B82F6', strokeWidth: 0 }}
+                        activeDot={{ r: 5, fill: '#3B82F6', stroke: '#fff', strokeWidth: 1.5 }}
                       />
                       <Line
                         type="monotone"
@@ -1154,10 +1154,10 @@ export const Dashboard: React.FC = () => {
                       />
                     </LineChart>
                   </ResponsiveContainer>
-                  <div className="flex items-center gap-5 text-[10px] text-zinc-500 font-mono mt-1">
+                  <div className="flex items-center gap-5 text-[10px] text-stone-500 dark:text-zinc-500 font-mono mt-1">
                     <span className="flex items-center gap-2">
-                      <span className="w-4 h-[2px] rounded-full inline-block bg-white/70" />
-                      <span className="w-2 h-2 rounded-full inline-block bg-white/70" />
+                      <span className="w-4 h-[2px] rounded-full inline-block bg-blue-400" />
+                      <span className="w-2 h-2 rounded-full inline-block bg-blue-400" />
                       Orçamento Aberto
                     </span>
                     <span className="flex items-center gap-2">
@@ -1169,8 +1169,8 @@ export const Dashboard: React.FC = () => {
                 </>
               ) : (
                 <div className="flex flex-col items-center justify-center h-52 gap-3">
-                  <TrendingUp size={32} className="text-zinc-300 dark:text-zinc-700" />
-                  <p className="text-zinc-400 dark:text-zinc-600 text-sm">Sem movimentação no período</p>
+                  <TrendingUp size={32} className="text-stone-300" />
+                  <p className="text-stone-400 text-sm">Sem movimentação no período</p>
                 </div>
               )}
             </Panel>
@@ -1200,17 +1200,17 @@ export const Dashboard: React.FC = () => {
                       totalCount={totalStageCount}
                     />
                   ))}
-                  <div className="flex items-center justify-between pt-3 border-t border-white/[0.07] mt-2">
-                    <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+                  <div className="flex items-center justify-between pt-3 border-t border-stone-200 dark:border-white/[0.06] mt-2">
+                    <span className="text-[10px] text-stone-500 dark:text-zinc-500 font-mono uppercase tracking-wider">
                       Total em aberto
                     </span>
-                    <span className="text-xl font-bold text-white">{fmt(commercial.pipelineValue)}</span>
+                    <span className="text-xl font-bold text-stone-900 dark:text-white">{fmt(commercial.pipelineValue)}</span>
                   </div>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-12 gap-3">
-                  <Layers size={32} className="text-zinc-300 dark:text-zinc-700" />
-                  <p className="text-zinc-400 dark:text-zinc-600 text-sm text-center">Nenhum negócio em aberto</p>
+                  <Layers size={32} className="text-stone-300" />
+                  <p className="text-stone-400 text-sm text-center">Nenhum negócio em aberto</p>
                 </div>
               )}
             </Panel>
@@ -1231,16 +1231,16 @@ export const Dashboard: React.FC = () => {
               <>
                 <ResponsiveContainer width="100%" height={200} debounce={50}>
                   <BarChart data={trend} barSize={6} barGap={2} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="2 6" stroke="rgba(255,255,255,0.04)" vertical={false} />
-                    <XAxis dataKey="date" tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                    <YAxis tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                    <Tooltip content={<ProfoundTooltip />} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
+                    <CartesianGrid strokeDasharray="2 6" stroke="rgba(0,0,0,0.06)" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fill: '#78716c', fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                    <YAxis tick={{ fill: '#78716c', fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                    <Tooltip content={<ProfoundTooltip />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
                     <Bar dataKey="newDeals"  name="Novos"    fill="#3B82F6" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="wonDeals"  name="Ganhos"   fill="#10B981" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="lostDeals" name="Perdidos" fill="#EF444460" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
-                <div className="flex items-center gap-4 text-[10px] text-zinc-500 font-mono">
+                <div className="flex items-center gap-4 text-[10px] text-stone-500 dark:text-zinc-500 font-mono">
                   {([['#3B82F6', 'Novos'], ['#10B981', 'Ganhos'], ['#EF4444', 'Perdidos']] as [string, string][]).map(([color, label]) => (
                     <span key={label} className="flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: color + (label === 'Perdidos' ? '80' : '') }} />
@@ -1263,8 +1263,8 @@ export const Dashboard: React.FC = () => {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-44 gap-3">
-                <Activity size={32} className="text-zinc-300 dark:text-zinc-700" />
-                <p className="text-zinc-400 dark:text-zinc-600 text-sm">Sem dados de orçamento</p>
+                <Activity size={32} className="text-stone-300" />
+                <p className="text-stone-400 text-sm">Sem dados de orçamento</p>
               </div>
             )}
           </Panel>
@@ -1294,15 +1294,15 @@ export const Dashboard: React.FC = () => {
                         </span>
                       </div>
                       <div>
-                        <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">
+                        <p className="text-[10px] font-mono uppercase tracking-wider text-stone-500 dark:text-zinc-500">
                           {charts.conversasPorCanal[0].canal}
                         </p>
-                        <p className="text-4xl font-bold text-white tabular-nums">
+                        <p className="text-4xl font-bold text-stone-900 dark:text-white tabular-nums">
                           {charts.conversasPorCanal[0].total}
                         </p>
                       </div>
                     </div>
-                    <span className="text-2xl font-bold text-zinc-700">100%</span>
+                    <span className="text-2xl font-bold text-stone-500">100%</span>
                   </div>
                 ) : (
                   charts.conversasPorCanal.map(c => (
@@ -1319,8 +1319,8 @@ export const Dashboard: React.FC = () => {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-44 gap-3">
-                <MessageSquare size={32} className="text-zinc-300 dark:text-zinc-700" />
-                <p className="text-zinc-400 dark:text-zinc-600 text-sm">Sem conversas no período</p>
+                <MessageSquare size={32} className="text-stone-300" />
+                <p className="text-stone-400 text-sm">Sem conversas no período</p>
               </div>
             )}
           </Panel>
@@ -1354,8 +1354,8 @@ export const Dashboard: React.FC = () => {
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-8 gap-3">
-                  <Clock size={28} className="text-zinc-300 dark:text-zinc-700" />
-                  <p className="text-zinc-400 dark:text-zinc-600 text-sm">Sem tarefas no período</p>
+                  <Clock size={28} className="text-stone-300" />
+                  <p className="text-stone-400 text-sm">Sem tarefas no período</p>
                 </div>
               )}
             </Panel>
@@ -1377,8 +1377,8 @@ export const Dashboard: React.FC = () => {
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-8 gap-3">
-                  <Zap size={28} className="text-zinc-300 dark:text-zinc-700" />
-                  <p className="text-zinc-400 dark:text-zinc-600 text-sm">Sem conversas no período</p>
+                  <Zap size={28} className="text-stone-300" />
+                  <p className="text-stone-400 text-sm">Sem conversas no período</p>
                 </div>
               )}
             </Panel>
@@ -1389,13 +1389,13 @@ export const Dashboard: React.FC = () => {
       {/* ══════════════════════════════════════════════════════════
           ANALYTICS AVANÇADOS — ETAPA 9
       ══════════════════════════════════════════════════════════ */}
-      <div className="border-t border-white/[0.06] pt-8">
+      <div className="border-t border-stone-200 dark:border-white/[0.06] pt-8">
         <div className="flex items-center gap-2 mb-6">
-          <Activity size={13} className="text-zinc-600" />
-          <span className="text-[10px] font-mono uppercase tracking-[0.25em] text-zinc-600">
+          <Activity size={13} className="text-stone-400 dark:text-zinc-600" />
+          <span className="text-[10px] font-mono uppercase tracking-[0.25em] text-stone-400 dark:text-zinc-600">
             Analytics Avançados
           </span>
-          <div className="flex-1 h-px bg-white/[0.05]" />
+          <div className="flex-1 h-px bg-stone-200 dark:bg-white/[0.05]" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -1427,8 +1427,8 @@ export const Dashboard: React.FC = () => {
                     );
                   })}
                   {totalForecast > 0 && (
-                    <div className="flex items-center justify-between pt-3 border-t border-white/[0.07]">
-                      <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
+                    <div className="flex items-center justify-between pt-3 border-t border-stone-200 dark:border-white/[0.06]">
+                      <span className="text-[10px] text-stone-500 dark:text-zinc-500 font-mono uppercase tracking-wider">
                         Forecast ponderado total
                       </span>
                       <span className="text-sm font-bold text-amber-400">{fmt(totalForecast)}</span>
@@ -1437,8 +1437,8 @@ export const Dashboard: React.FC = () => {
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-10 gap-3">
-                  <TrendingUp size={32} className="text-zinc-300 dark:text-zinc-700" />
-                  <p className="text-zinc-400 dark:text-zinc-600 text-sm">Nenhum negócio encontrado para este orçamento</p>
+                  <TrendingUp size={32} className="text-stone-300" />
+                  <p className="text-stone-400 text-sm">Nenhum negócio encontrado para este orçamento</p>
                 </div>
               )}
             </Panel>
@@ -1451,7 +1451,7 @@ export const Dashboard: React.FC = () => {
                 title="Performance por Agente"
                 subtitle="Receita gerada no período · win rate"
                 action={
-                  <span className="text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5 text-zinc-500 dark:text-zinc-400">
+                  <span className="text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded border border-stone-200 dark:border-white/10 bg-stone-50 dark:bg-white/[0.04] text-stone-500 dark:text-zinc-500">
                     Período
                   </span>
                 }
@@ -1475,22 +1475,21 @@ export const Dashboard: React.FC = () => {
                 ) : (
                   <div className="flex flex-col items-center justify-center py-10 gap-4">
                     <div
-                      className="w-16 h-16 rounded-full border-2 border-dashed border-zinc-700 flex items-center justify-center"
-                      style={{ boxShadow: '0 0 20px rgba(255,255,255,0.02)' }}
+                      className="w-16 h-16 rounded-full border-2 border-dashed border-stone-300 dark:border-zinc-700 flex items-center justify-center"
                     >
-                      <Users size={26} className="text-zinc-600" />
+                      <Users size={26} className="text-stone-400 dark:text-zinc-600" />
                     </div>
                     <div className="text-center">
-                      <p className="text-zinc-400 text-sm font-medium">
+                      <p className="text-stone-500 dark:text-zinc-400 text-sm font-medium">
                         Nenhum deal com responsável atribuído
                       </p>
-                      <p className="text-zinc-600 text-xs mt-1.5">
+                      <p className="text-stone-400 dark:text-zinc-600 text-xs mt-1.5">
                         Atribua deals a agentes para ver a performance individual
                       </p>
                     </div>
                     <Link
                       to="/deals"
-                      className="text-[10px] font-mono uppercase tracking-widest px-5 py-2.5 rounded-lg border border-white/10 text-zinc-400 hover:text-white hover:border-white/20 transition-all duration-200"
+                      className="text-[10px] font-mono uppercase tracking-widest px-5 py-2.5 rounded-lg border border-stone-200 dark:border-white/10 text-stone-500 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-white hover:border-stone-300 dark:hover:border-white/20 transition-all duration-200"
                     >
                       Atribuir Deals
                     </Link>
