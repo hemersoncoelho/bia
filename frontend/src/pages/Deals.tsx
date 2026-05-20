@@ -121,6 +121,36 @@ export const Deals: React.FC = () => {
     }
   }, [deals]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleSeedPipeline = useCallback(async () => {
+    if (!currentCompany) return;
+    setLoading(true);
+    try {
+      const { data: pipeline, error: plErr } = await supabase
+        .from('pipelines')
+        .insert({ company_id: currentCompany.id, name: 'Jornada do Cliente', is_active: true })
+        .select('id')
+        .single();
+      if (plErr) throw plErr;
+      const DEFAULT_STAGES = [
+        { name: 'Prospecção',  position: 0, color: '#6B7280', win_probability: 10 },
+        { name: 'Qualificação', position: 1, color: '#3B82F6', win_probability: 25 },
+        { name: 'Proposta',    position: 2, color: '#8B5CF6', win_probability: 50 },
+        { name: 'Negociação',  position: 3, color: '#F59E0B', win_probability: 75 },
+        { name: 'Fechamento',  position: 4, color: '#10B981', win_probability: 90 },
+      ];
+      const { error: stErr } = await supabase.from('pipeline_stages').insert(
+        DEFAULT_STAGES.map(s => ({ ...s, pipeline_id: pipeline!.id, company_id: currentCompany.id }))
+      );
+      if (stErr) throw stErr;
+      showToast('Pipeline criado com sucesso!');
+      await fetchData();
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      showToast(e?.message || 'Erro ao criar pipeline.', 'error');
+      setLoading(false);
+    }
+  }, [currentCompany, fetchData]);
+
   const handleUpdateDeal = useCallback((dealId: string, patch: Partial<Deal>) => {
     setDeals(prev => prev.map(d => d.id === dealId ? { ...d, ...patch } : d));
   }, []);
@@ -238,7 +268,7 @@ export const Deals: React.FC = () => {
           </button>
 
           {/* Configurar CRM — admin/gerente ou platform/system admin */}
-          {canAddDeal && pipelineId && (
+          {canAddDeal && pipelineId && stages.length > 0 && (
             <button
               onClick={() => setShowSettings(true)}
               className="flex items-center gap-2 px-3 py-2 text-[11px] font-mono uppercase tracking-widest text-text-muted hover:text-text-main border border-border rounded-lg hover:bg-surface-hover transition-all"
@@ -325,10 +355,25 @@ export const Deals: React.FC = () => {
                 <Kanban size={24} className="text-stone-600" />
               </div>
               <h3 className="text-lg font-medium text-primary mb-2">Nenhuma etapa configurada</h3>
-              <p className="text-stone-500 text-sm leading-relaxed">
-                Configure as etapas da jornada do cliente clicando em{' '}
-                <span className="text-text-main font-medium">Configurar CRM</span> no cabeçalho.
-              </p>
+              {canAddDeal ? (
+                <>
+                  <p className="text-stone-500 text-sm leading-relaxed mb-5">
+                    Crie um pipeline padrão com as etapas da jornada do cliente para começar.
+                  </p>
+                  <button
+                    onClick={handleSeedPipeline}
+                    disabled={loading}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-black text-sm font-semibold rounded-lg hover:bg-stone-200 transition-colors disabled:opacity-50"
+                  >
+                    {loading ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
+                    Criar Pipeline Padrão
+                  </button>
+                </>
+              ) : (
+                <p className="text-stone-500 text-sm leading-relaxed">
+                  Aguarde o administrador configurar as etapas da jornada do cliente.
+                </p>
+              )}
             </div>
           </div>
         ) : deals.length === 0 && !loading ? (

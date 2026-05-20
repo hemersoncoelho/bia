@@ -37,13 +37,35 @@ export const NewCompanyModal: React.FC<NewCompanyModalProps> = ({
 
     try {
       const slug = slugify(trimmed) + '-' + Math.random().toString(36).slice(2, 8);
-      const { error: insertError } = await supabase
+      const { data: company, error: insertError } = await supabase
         .from('companies')
         .insert({ name: trimmed, slug, is_active: true })
         .select('id')
         .single();
 
       if (insertError) throw insertError;
+
+      // Semeia pipeline padrão para a nova empresa
+      if (company?.id) {
+        const { data: pipeline } = await supabase
+          .from('pipelines')
+          .insert({ company_id: company.id, name: 'Jornada do Cliente', is_active: true })
+          .select('id')
+          .single();
+
+        if (pipeline?.id) {
+          const DEFAULT_STAGES = [
+            { name: 'Prospecção',  position: 0, color: '#6B7280', win_probability: 10 },
+            { name: 'Qualificação', position: 1, color: '#3B82F6', win_probability: 25 },
+            { name: 'Proposta',    position: 2, color: '#8B5CF6', win_probability: 50 },
+            { name: 'Negociação',  position: 3, color: '#F59E0B', win_probability: 75 },
+            { name: 'Fechamento',  position: 4, color: '#10B981', win_probability: 90 },
+          ];
+          await supabase.from('pipeline_stages').insert(
+            DEFAULT_STAGES.map(s => ({ ...s, pipeline_id: pipeline.id, company_id: company.id }))
+          );
+        }
+      }
 
       setName('');
       onSuccess();
