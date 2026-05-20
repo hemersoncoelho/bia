@@ -124,24 +124,48 @@ export const Deals: React.FC = () => {
   const handleSeedPipeline = useCallback(async () => {
     if (!currentCompany) return;
     setLoading(true);
+    const DEFAULT_STAGES = [
+      { name: 'Prospecção',  position: 0, color: '#6B7280', win_probability: 10 },
+      { name: 'Qualificação', position: 1, color: '#3B82F6', win_probability: 25 },
+      { name: 'Proposta',    position: 2, color: '#8B5CF6', win_probability: 50 },
+      { name: 'Negociação',  position: 3, color: '#F59E0B', win_probability: 75 },
+      { name: 'Fechamento',  position: 4, color: '#10B981', win_probability: 90 },
+    ];
     try {
-      const { data: pipeline, error: plErr } = await supabase
-        .from('pipelines')
-        .insert({ company_id: currentCompany.id, name: 'Jornada do Cliente', is_active: true })
+      // Reutiliza pipeline existente ou cria novo
+      let targetPipelineId = pipelineId;
+      if (!targetPipelineId) {
+        const { data: existing } = await supabase
+          .from('pipelines')
+          .select('id')
+          .eq('company_id', currentCompany.id)
+          .eq('is_active', true)
+          .limit(1)
+          .maybeSingle();
+        if (existing?.id) {
+          targetPipelineId = existing.id;
+        } else {
+          const { data: created, error: plErr } = await supabase
+            .from('pipelines')
+            .insert({ company_id: currentCompany.id, name: 'Jornada do Cliente', is_active: true })
+            .select('id')
+            .single();
+          if (plErr) throw plErr;
+          targetPipelineId = created!.id;
+        }
+      }
+      // Insere etapas apenas se ainda não existirem
+      const { data: existingStages } = await supabase
+        .from('pipeline_stages')
         .select('id')
-        .single();
-      if (plErr) throw plErr;
-      const DEFAULT_STAGES = [
-        { name: 'Prospecção',  position: 0, color: '#6B7280', win_probability: 10 },
-        { name: 'Qualificação', position: 1, color: '#3B82F6', win_probability: 25 },
-        { name: 'Proposta',    position: 2, color: '#8B5CF6', win_probability: 50 },
-        { name: 'Negociação',  position: 3, color: '#F59E0B', win_probability: 75 },
-        { name: 'Fechamento',  position: 4, color: '#10B981', win_probability: 90 },
-      ];
-      const { error: stErr } = await supabase.from('pipeline_stages').insert(
-        DEFAULT_STAGES.map(s => ({ ...s, pipeline_id: pipeline!.id, company_id: currentCompany.id }))
-      );
-      if (stErr) throw stErr;
+        .eq('pipeline_id', targetPipelineId)
+        .limit(1);
+      if (!existingStages?.length) {
+        const { error: stErr } = await supabase
+          .from('pipeline_stages')
+          .insert(DEFAULT_STAGES.map(s => ({ ...s, pipeline_id: targetPipelineId })));
+        if (stErr) throw stErr;
+      }
       showToast('Pipeline criado com sucesso!');
       await fetchData();
     } catch (err: unknown) {
@@ -149,7 +173,7 @@ export const Deals: React.FC = () => {
       showToast(e?.message || 'Erro ao criar pipeline.', 'error');
       setLoading(false);
     }
-  }, [currentCompany, fetchData]);
+  }, [currentCompany, pipelineId, fetchData]);
 
   const handleUpdateDeal = useCallback((dealId: string, patch: Partial<Deal>) => {
     setDeals(prev => prev.map(d => d.id === dealId ? { ...d, ...patch } : d));
