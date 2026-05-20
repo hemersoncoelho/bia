@@ -26,16 +26,22 @@ Deno.serve(async (req) => {
     if (!authHeader) return json({ success: false, error: 'Não autenticado.' }, 401);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const anonKey    = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     if (!serviceKey) return json({ success: false, error: 'SUPABASE_SERVICE_ROLE_KEY não configurada.' }, 500);
 
-    const supabase = createClient(supabaseUrl, serviceKey);
+    // Cliente com anon key + JWT do usuário — padrão correto para getUser() em Edge Functions
+    const supabaseAuth = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    // Cliente com service role para operações admin (criar usuário, upsert, etc.)
+    const supabaseAdmin = createClient(supabaseUrl, serviceKey);
 
     // Valida que o caller é platform_admin ou system_admin
-    const { data: { user: caller } } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-    if (!caller) return json({ success: false, error: 'Sessão inválida.' }, 401);
+    const { data: { user: caller }, error: authErr } = await supabaseAuth.auth.getUser();
+    if (authErr || !caller) return json({ success: false, error: 'Sessão inválida.' }, 401);
 
-    const { data: callerProfile } = await supabase
+    const { data: callerProfile } = await supabaseAdmin
       .from('user_profiles')
       .select('system_role')
       .eq('id', caller.id)
@@ -92,13 +98,13 @@ Deno.serve(async (req) => {
     await new Promise(resolve => setTimeout(resolve, 600));
 
     // Atualiza system_role e full_name no perfil
-    await supabase
+    await supabaseAdmin
       .from('user_profiles')
       .update({ system_role: targetRole, full_name: fullNameVal })
       .eq('id', userId);
 
     // Vincula o usuário à empresa
-    const { error: linkErr } = await supabase
+    const { error: linkErr } = await supabaseAdmin
       .from('user_companies')
       .upsert(
         { user_id: userId, company_id, role_in_company: companyRole },
