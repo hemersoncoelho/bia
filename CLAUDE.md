@@ -6,6 +6,8 @@ Este arquivo fornece orientações ao Claude Code (claude.ai/code) ao trabalhar 
 
 **SEMPRE** invoque a skill `/graphify` antes de qualquer busca no codebase (grep, find, leitura exploratória de arquivos desconhecidos). Isso se aplica a toda exploração de código, localização de símbolos e descoberta de arquivos — sem exceção.
 
+**SEMPRE** invoque o MCP `/context7-mcp` antes de qualquer  refatoracao, criacao de novos componentes. Use para pegar as bibliotecas mais atuais. 
+
 ## Visão Geral do Projeto
 
 Sia One é um CRM SaaS multi-tenant construído com React + Supabase. Não há backend tradicional — toda a lógica de negócio roda pelo Supabase (PostgreSQL + Auth + Realtime + Edge Functions). O frontend fica em `frontend/` e as Edge Functions em `supabase/functions/`.

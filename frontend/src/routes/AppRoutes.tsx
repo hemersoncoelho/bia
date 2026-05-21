@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { ProtectedRoute, PublicRoute } from './Guards';
 import { AgentRestrictedRoute, IndexRedirect } from '../components/RouteGuardForAgent';
 import { AppShell } from '../components/Layout/AppShell';
@@ -36,10 +36,15 @@ const PageSkeleton = () => (
 
 // Admin Pages
 import { AdminShell } from '../components/admin/AdminShell';
-import { CompaniesList } from '../pages/admin/CompaniesList';
-import { CompanyDetails } from '../pages/admin/CompanyDetails';
 import { UsersList, ModulesList, SupportPanel } from '../pages/admin/OtherAdminPages';
+import { TenantsPage } from '../pages/admin/TenantsPage';
+import { TenantDetailPage } from '../pages/admin/TenantDetailPage';
 import { Unauthorized } from '../pages/Unauthorized';
+
+const CompanyDetailsRedirect: React.FC = () => {
+  const { companyId } = useParams<{ companyId: string }>();
+  return <Navigate to={`/admin/tenants/${companyId ?? ''}`} replace />;
+};
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -99,9 +104,16 @@ export const AppRoutes: React.FC = () => {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="companies" replace />} />
-        <Route path="companies" element={<CompaniesList />} />
-        <Route path="companies/:companyId" element={<CompanyDetails />} />
+        <Route index element={<Navigate to="tenants" replace />} />
+        {/* Redirect antigo dashboard → analytics */}
+        <Route path="dashboard" element={<Navigate to="/admin/tenants?tab=analytics" replace />} />
+        {/* Novas rotas Tenants */}
+        <Route path="tenants" element={<TenantsPage />} />
+        <Route path="tenants/:id" element={<TenantDetailPage />} />
+        {/* Redirect rotas antigas companies */}
+        <Route path="companies" element={<Navigate to="/admin/tenants" replace />} />
+        <Route path="companies/:companyId" element={<CompanyDetailsRedirect />} />
+        {/* Outras rotas admin */}
         <Route path="users" element={<UsersList />} />
         <Route path="modules" element={<ModulesList />} />
         <Route path="support" element={<SupportPanel />} />

@@ -1,18 +1,21 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { 
-  Building2, 
-  Users, 
-  Blocks, 
-  ShieldAlert, 
+import {
+  Building2,
+  Users,
+  Blocks,
+  ShieldAlert,
   Settings,
   ShieldHalf
 } from 'lucide-react';
+import { MOCK_TENANTS } from '../../pages/admin/adminMock';
+
+const TENANT_COUNT = MOCK_TENANTS.length;
 
 export const AdminSidebar: React.FC = () => {
 
   const navItems = [
-    { icon: <Building2 size={20} />, label: 'Tenants', to: '/admin/companies' },
+    { icon: <Building2 size={20} />, label: 'Tenants', to: '/admin/tenants', count: TENANT_COUNT },
     { icon: <Users size={20} />, label: 'Usuários Globais', to: '/admin/users' },
     { icon: <Blocks size={20} />, label: 'Módulos', to: '/admin/modules' },
     { icon: <ShieldAlert size={20} />, label: 'Suporte & Ops', to: '/admin/support' },
@@ -44,14 +47,19 @@ export const AdminSidebar: React.FC = () => {
             to={item.to}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-200 group
-               ${isActive 
-                 ? 'bg-amber-500/10 text-amber-500' 
+               ${isActive
+                 ? 'bg-amber-500/10 text-amber-500'
                  : 'text-text-muted hover:text-amber-500 hover:bg-amber-500/5'
                }`
             }
           >
             <span className="opacity-70 group-hover:opacity-100 transition-opacity">{item.icon}</span>
-            {item.label}
+            <span className="flex-1">{item.label}</span>
+            {'count' in item && item.count !== undefined && (
+              <span className="text-[10px] font-mono bg-amber-500/10 text-amber-500/80 px-1.5 py-0.5 rounded tabular-nums">
+                {item.count}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>

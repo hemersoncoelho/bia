@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Loader2, WifiOff, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { WifiOff, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { cn } from '../../lib/utils';
 import { AgentToolDrawer } from './AgentToolDrawer';

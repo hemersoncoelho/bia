@@ -1,0 +1,1085 @@
+{
+  "name": "[Sia One] [Messages] [Nao-Oficial]",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_resolve_company_by_token",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_instance_token: $('If').first().json.raw_payload.token }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -480,
+        2544
+      ],
+      "id": "16868731-4d9c-49f4-95a4-73c78a27072d",
+      "name": "busca_empresa1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Substitui media_url pela URL publica da UAZAPI (valida por 48h)\n// e restaura todos os campos do atalho para o merge\nconst d = $('normalizar').first().json;\nconst uazapiResp = $input.first().json;\n\nconst fileUrl  = uazapiResp.fileURL  || d.media_url;\nconst fileMime = uazapiResp.mimetype || d.media_mime_type;\n\nreturn [{\n  json: {\n    ...d,\n    media_url:       fileUrl,\n    media_mime_type: fileMime,\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        2368
+      ],
+      "id": "b54475fa-393b-4124-9ba8-a4d31d54d6c6",
+      "name": "set_media_url1"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "d4d42693-32a0-420d-8a06-f780c08db27e-messages",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -848,
+        2288
+      ],
+      "id": "eb793ef3-06b5-4522-9f62-0cb7e66a6a97",
+      "name": "Webhook",
+      "webhookId": "d4d42693-32a0-420d-8a06-f780c08db27e"
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $input.first().json.body || $input.first().json;\n\nreturn [{\n  json: {\n    raw_event_body: {\n      event_type: payload.EventType || 'unknown',\n      external_id: payload.message?.messageid || '',\n      sender_phone: payload.chat?.phone || '',\n      channel_type: 'whatsapp',\n      raw_payload: payload,\n      processed: false\n    },\n    payload: payload\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        2288
+      ],
+      "id": "c18079ef-2520-4cae-a0c2-f40e9f60e4dd",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/channel_events_raw",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.raw_event_body) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -176,
+        2288
+      ],
+      "id": "5718dcdc-53f6-49df-bd1d-5e9fbf30da30",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c65a0f70-29dd-4b26-836a-2990236f4f2f",
+              "leftValue": "={{ $json.event_type }}",
+              "rightValue": "messages",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        144,
+        2288
+      ],
+      "id": "4672fb79-fa88-424b-9b64-08fb661a26cf",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "jsCode": "const savedRow = $('If').first().json;\nconst payload = savedRow.raw_payload || {};\nconst msg = payload.message || {};\nconst chat = payload.chat || {};\n\n// ── NORMALIZAÇÃO DO PHONE (formato: 558898325848) ─────────────\n// Remove tudo que não for dígito, garante prefixo 55 quando ausente\nlet rawPhone = chat.phone || msg.chatid?.split('@')[0] || '';\nlet phone = rawPhone.replace(/[^0-9]/g, '');\nif (phone.startsWith('0')) phone = phone.slice(1);\n// Número BR sem DDI (10 ou 11 dígitos) → adiciona 55\nif (phone.length >= 10 && phone.length <= 11) phone = '55' + phone;\n\n// ── EXTRAÇÃO DE METADADOS DO LEAD (campos UAZAPI) ─────────────\nconst leadMetadata = {};\nfor (let i = 1; i <= 20; i++) {\n  const key = `lead_field${String(i).padStart(2, '0')}`;\n  if (chat[key]) leadMetadata[key] = chat[key];\n}\nif (chat.lead_name)         leadMetadata.lead_name = chat.lead_name;\nif (chat.lead_fullName)     leadMetadata.lead_fullName = chat.lead_fullName;\nif (chat.lead_status)       leadMetadata.lead_status = chat.lead_status;\nif (chat.lead_tags?.length) leadMetadata.lead_tags = chat.lead_tags;\nif (chat.lead_notes)        leadMetadata.lead_notes = chat.lead_notes;\nif (chat.lead_personalid)   leadMetadata.lead_personalid = chat.lead_personalid;\nif (chat.lead_email)        leadMetadata.lead_email = chat.lead_email;\nif (msg.track_source)       leadMetadata.track_source = msg.track_source;\nif (msg.track_id)           leadMetadata.track_id = msg.track_id;\nleadMetadata.instance_name  = payload.instanceName || '';\n\n// ─────────────────────────────────────────────────────────────\nconst fromMe = msg.fromMe === true;\nconst externalId = msg.messageid || savedRow.external_id || '';\nconst senderName = msg.senderName || chat.wa_name || '';\nconst instanceName = payload.instanceName || '';\n\nconst timestamp = msg.messageTimestamp\n  ? new Date(Number(msg.messageTimestamp)).toISOString()\n  : new Date().toISOString();\n\nconst uazapiType = (msg.messageType || '').toLowerCase();\nconst simpleType = msg.type || '';\nconst content = msg.content || {};\n\nlet messageType = 'text';\nlet body = msg.text || '';\nlet mediaUrl = null;\nlet mediaMimeType = null;\nlet mediaFilename = null;\nlet thumbnailUrl = null;\nlet reactionEmoji = null;\nlet quotedExternalId = null;\nlet metadata = {};\n\nswitch (uazapiType) {\n  case 'conversation':\n  case 'extendedtextmessage':\n    messageType = 'text';\n    body = msg.text || content.text || '';\n    const adReply = content.contextInfo?.externalAdReply;\n    if (adReply) {\n      metadata.ad_title = adReply.title || '';\n      metadata.ad_media_url = adReply.mediaURL || '';\n    }\n    if (content.contextInfo?.quotedMessage) {\n      quotedExternalId = content.contextInfo?.stanzaId || null;\n    }\n    break;\n\n  case 'audiomessage':\n    messageType = 'audio';\n    body = '';\n    mediaUrl = content.URL || content.url || content.directPath || null;\n    mediaMimeType = content.mimetype || 'audio/ogg; codecs=opus';\n    metadata.seconds = content.seconds || 0;\n    metadata.ptt = content.PTT || content.ptt || false;\n    break;\n\n  case 'imagemessage':\n    messageType = 'image';\n    body = msg.text || content.caption || '';\n    mediaUrl = content.URL || content.url || content.directPath || null;\n    mediaMimeType = content.mimetype || 'image/jpeg';\n    break;\n\n  case 'videomessage':\n    messageType = 'video';\n    body = msg.text || content.caption || '';\n    mediaUrl = content.URL || content.url || content.directPath || null;\n    mediaMimeType = content.mimetype || 'video/mp4';\n    metadata.seconds = content.seconds || 0;\n    break;\n\n  case 'documentmessage':\n  case 'documentwithcaptionmessage':\n    messageType = 'document';\n    body = msg.text || content.caption || content.title || '';\n    mediaUrl = content.URL || content.url || content.directPath || null;\n    mediaMimeType = content.mimetype || 'application/octet-stream';\n    mediaFilename = content.fileName || content.title || 'documento';\n    break;\n\n  case 'stickermessage':\n    messageType = 'sticker';\n    mediaUrl = content.URL || content.url || content.directPath || null;\n    mediaMimeType = content.mimetype || 'image/webp';\n    break;\n\n  case 'locationmessage':\n  case 'livelocationmessage':\n    messageType = 'location';\n    metadata.latitude = content.degreesLatitude;\n    metadata.longitude = content.degreesLongitude;\n    metadata.address = content.address || '';\n    body = content.name || `${content.degreesLatitude}, ${content.degreesLongitude}`;\n    break;\n\n  case 'contactmessage':\n  case 'contactsarraymessage':\n    messageType = 'contact_card';\n    body = content.displayName || msg.text || 'Contato';\n    break;\n\n  case 'reactionmessage':\n    messageType = 'reaction';\n    reactionEmoji = msg.reaction || content.text || '';\n    quotedExternalId = content.key?.id || null;\n    break;\n\n  default:\n    if (simpleType === 'image') messageType = 'image';\n    else if (simpleType === 'audio') messageType = 'audio';\n    else if (simpleType === 'video') messageType = 'video';\n    else if (simpleType === 'document') messageType = 'document';\n    else if (simpleType === 'sticker') messageType = 'sticker';\n    else messageType = simpleType || 'unknown';\n    body = msg.text || '';\n    break;\n}\n\nif (!quotedExternalId && msg.quoted) {\n  quotedExternalId = String(msg.quoted);\n}\n\nreturn [{\n  json: {\n    phone,\n    instance_name: instanceName,\n    sender_name: senderName,\n    direction: fromMe ? 'outbound' : 'inbound',\n    sender_type: fromMe ? 'user' : 'contact',\n    message_type: messageType,\n    body: body || '',\n    media_url: mediaUrl,\n    media_mime_type: mediaMimeType,\n    media_filename: mediaFilename,\n    thumbnail_url: thumbnailUrl,\n    external_message_id: externalId,\n    quoted_external_id: quotedExternalId,\n    reaction_emoji: reactionEmoji,\n    metadata: metadata,\n    lead_metadata: leadMetadata,\n    raw_provider_payload: payload,\n    timestamp,\n    company_id: $('busca_empresa1').first().json.company_id || null,\n    raw_event_id: savedRow.id,\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -176,
+        2544
+      ],
+      "id": "204dbd5f-6b08-4d25-99ef-722b3e1da61e",
+      "name": "normalizar"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://simplifique.uazapi.com/message/download",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $('normalizar').first().json.raw_provider_payload.token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ id: $('normalizar').first().json.external_message_id, return_link: true, generate_mp3: $('normalizar').first().json.message_type === 'audio' }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        448,
+        2368
+      ],
+      "id": "3969a9d5-7ae1-4a51-bda5-93e0203fc11d",
+      "name": "uazapi_get_url",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        448,
+        2688
+      ],
+      "id": "1e453c9d-c3f5-4194-abdf-1a6ecba3881f",
+      "name": "merge_paths"
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\n\nreturn [{\n  json: {\n    rpc_body: {\n      p_company_id:           d.company_id,\n      p_phone:                d.phone,\n      p_sender_name:          d.sender_name || '',\n      p_direction:            d.direction || 'inbound',\n      p_sender_type:          d.sender_type || 'contact',\n      p_message_type:         d.message_type || 'text',\n      p_body:                 d.body || '',\n      p_media_url:            d.media_url || null,\n      p_media_mime_type:      d.media_mime_type || null,\n      p_media_filename:       d.media_filename || null,\n      p_thumbnail_url:        d.thumbnail_url || null,\n      p_external_message_id:  d.external_message_id || null,\n      p_quoted_external_id:   d.quoted_external_id || null,\n      p_reaction_emoji:       d.reaction_emoji || null,\n      p_metadata:             d.metadata || {},\n      p_raw_provider_payload: d.raw_provider_payload || {},\n      p_timestamp:            d.timestamp || new Date().toISOString(),\n    },\n    normalized: d,\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        2688
+      ],
+      "id": "2c3902b7-17a3-4c02-9516-94380b723c13",
+      "name": "preparar_persistencia"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e7c01f24-a549-4c42-8878-c69ea472ec12",
+              "leftValue": "={{ $json.message_type }}",
+              "rightValue": "audio",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        144,
+        2544
+      ],
+      "id": "4e3dbecd-61d6-414a-94b4-156767be1c67",
+      "name": "If7"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/transcriptions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "model",
+              "value": "whisper-1"
+            },
+            {
+              "name": "language",
+              "value": "pt"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1088,
+        2368
+      ],
+      "id": "3797c88e-370d-4532-912f-5722278213c7",
+      "name": "transcrever_whisper",
+      "credentials": {
+        "openAiApi": {
+          "id": "1dOXhDaqEqdVNGVp",
+          "name": "OpenAI - Sales"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Recupera os dados normalizados originais e injeta a transcrição do Whisper\nconst normalized = $('normalizar').first().json;\nconst transcription = ($input.first().json?.text || '').trim();\n\nreturn [{\n  json: {\n    ...normalized,\n    // company_id dinâmico via busca_empresa\n    company_id: $('busca_empresa1').first().json.company_id || null,\n    metadata: {\n      ...(normalized.metadata || {}),\n      transcription: transcription,\n    },\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1296,
+        2368
+      ],
+      "id": "029370b5-79a7-484f-8c9f-69d461784365",
+      "name": "add_transcription"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_persist_inbound_message",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.rpc_body) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        848,
+        2688
+      ],
+      "id": "34f49c96-f2c9-4df1-bf6e-0cf18f69ba22",
+      "name": "inbout_message1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.media_url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        848,
+        2368
+      ],
+      "id": "8f2ca063-0727-463f-8413-78a7dceb2b9f",
+      "name": "get_audio1"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "rza0R4Ct42ClJskKfuwOE",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/rza0R4Ct42ClJskKfuwOE",
+          "cachedResultName": "[Sia One] [Buffer]"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2336,
+        2480
+      ],
+      "id": "13b95fba-18a0-43c2-8aea-b400ee8d81b3",
+      "name": "Call '[Sia One] [Buffer]'1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6a04f4c2-f035-4d11-8f29-e87f8c6e72c2",
+              "leftValue": "={{ $('preparar_persistencia').item.json.rpc_body.p_raw_provider_payload.message.fromMe }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1920,
+        2688
+      ],
+      "id": "5ca40bad-4845-4a1f-8bf4-b55495dd95de",
+      "name": "from me ?1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "387fb50a-ea80-4651-b687-0b8e88bc12da",
+              "name": "message.phone",
+              "value": "={{ $('preparar_persistencia').item.json.rpc_body.p_phone }}",
+              "type": "string"
+            },
+            {
+              "id": "58c3b498-fc74-4599-9ce4-24e287900f30",
+              "name": "message.sender_name",
+              "value": "={{ $('preparar_persistencia').item.json.rpc_body.p_sender_name }}",
+              "type": "string"
+            },
+            {
+              "id": "b8c2986b-95f2-4a4b-af30-560e41a15aca",
+              "name": "message.timestampz",
+              "value": "={{ $now }}",
+              "type": "string"
+            },
+            {
+              "id": "c2315f8e-7821-48df-9549-618e8f3bd8c1",
+              "name": "message.company_id",
+              "value": "={{ $('preparar_persistencia').item.json.rpc_body.p_company_id }}",
+              "type": "string"
+            },
+            {
+              "id": "8b2151cc-ed7e-4803-bf90-7f919b71bc44",
+              "name": "message.message_id",
+              "value": "={{ $('preparar_persistencia').item.json.rpc_body.p_external_message_id }}",
+              "type": "string"
+            },
+            {
+              "id": "ef9bc4f9-5712-44ba-a861-3fcc72c033cd",
+              "name": "message.text",
+              "value": "={{ $('preparar_persistencia').item.json.normalized?.metadata?.transcription \n   ?? $('preparar_persistencia').item.json.rpc_body?.p_body \n   ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "f9a1c2e3-0d4b-4e5f-a6b7-8c9d0e1f2a3b",
+              "name": "message.lead_metadata",
+              "value": "={{ $('preparar_persistencia').item.json.normalized?.lead_metadata || {} }}",
+              "type": "object"
+            },
+            {
+              "id": "f4589bd3-f0ac-4a00-a8f5-7a2d068ed0eb",
+              "name": "message.conversation_id",
+              "value": "={{ $json.conversation_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1056,
+        2688
+      ],
+      "id": "2227b539-797c-4a13-9cb6-8a6cafb78767",
+      "name": "colect_data1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2144,
+        2896
+      ],
+      "id": "c1b7ee20-93b7-40fb-ac87-1b97ca6c290e",
+      "name": "No Operation, do nothing1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_ensure_prospeccao_deal",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  p_company_id:      $json.message.company_id,\n  p_phone:           $json.message.phone,\n  p_sender_name:     $json.message.sender_name,\n  p_lead_metadata:   $json.message.lead_metadata || {},\n  p_conversation_id: $json.message.conversation_id || null\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1296,
+        2688
+      ],
+      "id": "1f5c957d-fddd-4a5b-84a7-f336cd4209da",
+      "name": "verificar_criar_deal",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_update_contact_lead_metadata",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  p_contact_id:    $json.contact_id,\n  p_company_id:    $('colect_data1').item.json.message.company_id,\n  p_lead_metadata: $('colect_data1').item.json.message.lead_metadata || {}\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1520,
+        2688
+      ],
+      "id": "cf90b1b4-78f3-42cd-b7e3-b2e031489753",
+      "name": "salvar_lead_metadata",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "387fb50a-ea80-4651-b687-0b8e88bc12da",
+              "name": "message.phone",
+              "value": "={{ $('preparar_persistencia').item.json.rpc_body.p_phone }}",
+              "type": "string"
+            },
+            {
+              "id": "58c3b498-fc74-4599-9ce4-24e287900f30",
+              "name": "message.sender_name",
+              "value": "={{ $('preparar_persistencia').item.json.rpc_body.p_sender_name }}",
+              "type": "string"
+            },
+            {
+              "id": "b8c2986b-95f2-4a4b-af30-560e41a15aca",
+              "name": "message.timestampz",
+              "value": "={{ $now }}",
+              "type": "string"
+            },
+            {
+              "id": "c2315f8e-7821-48df-9549-618e8f3bd8c1",
+              "name": "message.company_id",
+              "value": "={{ $('preparar_persistencia').item.json.rpc_body.p_company_id }}",
+              "type": "string"
+            },
+            {
+              "id": "8b2151cc-ed7e-4803-bf90-7f919b71bc44",
+              "name": "message.message_id",
+              "value": "={{ $('preparar_persistencia').item.json.rpc_body.p_external_message_id }}",
+              "type": "string"
+            },
+            {
+              "id": "ef9bc4f9-5712-44ba-a861-3fcc72c033cd",
+              "name": "message.text",
+              "value": "={{ $('preparar_persistencia').item.json.normalized?.metadata?.transcription \n   ?? $('preparar_persistencia').item.json.rpc_body?.p_body \n   ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "f9a1c2e3-0d4b-4e5f-a6b7-8c9d0e1f2a3b",
+              "name": "message.lead_metadata",
+              "value": "={{ $('preparar_persistencia').item.json.normalized?.lead_metadata || {} }}",
+              "type": "object"
+            },
+            {
+              "id": "f73ff225-c826-42c8-a4a0-399b2ade7d0e",
+              "name": "message.contact_id",
+              "value": "={{ $json.contact_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2128,
+        2480
+      ],
+      "id": "e56fd28b-b0f1-46d1-b550-411005cd20bc",
+      "name": "colect_data3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_cancel_pending_followup_triggers_on_inbound_message",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  p_company_id:         $('colect_data1').item.json.message.company_id,\n  p_contact_id:         $json.contact_id,\n  p_conversation_id:    $('inbout_message1').item.json.conversation_id,\n  p_inbound_message_id: null,\n  p_inbound_message_at: $('colect_data1').item.json.message.timestampz\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1728,
+        2688
+      ],
+      "id": "da5238f7-a0ad-4360-9b6d-7b2345d8fd11",
+      "name": "cancelar_follow",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "webhook.solucoesai.tech",
+            "user-agent": "uazapiGO-Webhook/1.0",
+            "content-length": "2435",
+            "accept-encoding": "gzip",
+            "content-type": "application/json",
+            "x-forwarded-for": "177.234.159.170",
+            "x-forwarded-host": "webhook.solucoesai.tech",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "2fbe478a82a0",
+            "x-real-ip": "177.234.159.170"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "BaseUrl": "https://simplifique.uazapi.com",
+            "EventType": "messages",
+            "chat": {
+              "chatbot_agentResetMemoryAt": 0,
+              "chatbot_disableUntil": 0,
+              "chatbot_lastTriggerAt": 0,
+              "chatbot_lastTrigger_id": "",
+              "id": "",
+              "image": "",
+              "imagePreview": "",
+              "lead_assignedAttendant_id": "",
+              "lead_email": "",
+              "lead_field01": "",
+              "lead_field02": "",
+              "lead_field03": "",
+              "lead_field04": "",
+              "lead_field05": "",
+              "lead_field06": "",
+              "lead_field07": "",
+              "lead_field08": "",
+              "lead_field09": "",
+              "lead_field10": "",
+              "lead_field11": "",
+              "lead_field12": "",
+              "lead_field13": "",
+              "lead_field14": "",
+              "lead_field15": "",
+              "lead_field16": "",
+              "lead_field17": "",
+              "lead_field18": "",
+              "lead_field19": "",
+              "lead_field20": "",
+              "lead_fullName": "",
+              "lead_isTicketOpen": false,
+              "lead_kanbanOrder": 0,
+              "lead_name": "",
+              "lead_notes": "",
+              "lead_personalid": "",
+              "lead_status": "",
+              "lead_tags": [],
+              "name": "",
+              "owner": "558631427166",
+              "phone": "558898325848",
+              "wa_archived": false,
+              "wa_chatid": "558898325848@s.whatsapp.net",
+              "wa_chatlid": "172911423938744@lid",
+              "wa_contactName": "",
+              "wa_ephemeralExpiration": 7776000,
+              "wa_fastid": "558631427166:558898325848",
+              "wa_isBlocked": false,
+              "wa_isGroup": false,
+              "wa_isGroup_admin": false,
+              "wa_isGroup_announce": false,
+              "wa_isGroup_community": false,
+              "wa_isGroup_member": false,
+              "wa_isPinned": false,
+              "wa_label": [],
+              "wa_lastMessageSender": "172911423938744@lid",
+              "wa_lastMessageTextVote": "Oi",
+              "wa_lastMessageType": "ExtendedTextMessage",
+              "wa_lastMsgTimestamp": 1779370390000,
+              "wa_muteEndTime": 0,
+              "wa_name": "Hemerson Coelho",
+              "wa_notes": "",
+              "wa_unreadCount": 1
+            },
+            "chatSource": "updated",
+            "instanceName": "salesia_dr_renan_meneses",
+            "message": {
+              "buttonOrListid": "",
+              "chatid": "558898325848@s.whatsapp.net",
+              "chatlid": "172911423938744@lid",
+              "content": {
+                "text": "Oi",
+                "contextInfo": {
+                  "expiration": 7776000,
+                  "ephemeralSettingTimestamp": 1756911379,
+                  "disappearingMode": {
+                    "initiator": 0,
+                    "trigger": 1,
+                    "initiatedByMe": true
+                  }
+                },
+                "inviteLinkGroupTypeV2": 0
+              },
+              "convertOptions": "",
+              "edited": "",
+              "fromMe": false,
+              "groupName": "",
+              "id": "558631427166:3EB0DDF0A91FBB9EB63526",
+              "isGroup": false,
+              "mediaType": "",
+              "messageTimestamp": 1779370390000,
+              "messageType": "ExtendedTextMessage",
+              "messageid": "3EB0DDF0A91FBB9EB63526",
+              "owner": "558631427166",
+              "pinned": false,
+              "quoted": "",
+              "reaction": "",
+              "sender": "172911423938744@lid",
+              "senderName": "Hemerson Coelho",
+              "sender_lid": "172911423938744@lid",
+              "sender_pn": "558898325848@s.whatsapp.net",
+              "source": "web",
+              "status": "",
+              "text": "Oi",
+              "track_id": "",
+              "track_source": "",
+              "type": "text",
+              "vote": "",
+              "wasSentByApi": false
+            },
+            "owner": "558631427166",
+            "token": "47893027-a61d-4af7-90e3-d706113d99be"
+          },
+          "webhookUrl": "https://webhook.solucoesai.tech/webhook/d4d42693-32a0-420d-8a06-f780c08db27e-messages",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "busca_empresa1": {
+      "main": [
+        [
+          {
+            "node": "normalizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "set_media_url1": {
+      "main": [
+        [
+          {
+            "node": "get_audio1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "busca_empresa1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "normalizar": {
+      "main": [
+        [
+          {
+            "node": "If7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "uazapi_get_url": {
+      "main": [
+        [
+          {
+            "node": "set_media_url1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "merge_paths": {
+      "main": [
+        [
+          {
+            "node": "preparar_persistencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "preparar_persistencia": {
+      "main": [
+        [
+          {
+            "node": "inbout_message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If7": {
+      "main": [
+        [
+          {
+            "node": "uazapi_get_url",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "merge_paths",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "transcrever_whisper": {
+      "main": [
+        [
+          {
+            "node": "add_transcription",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add_transcription": {
+      "main": [
+        [
+          {
+            "node": "merge_paths",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "inbout_message1": {
+      "main": [
+        [
+          {
+            "node": "colect_data1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_audio1": {
+      "main": [
+        [
+          {
+            "node": "transcrever_whisper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "from me ?1": {
+      "main": [
+        [
+          {
+            "node": "colect_data3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "colect_data1": {
+      "main": [
+        [
+          {
+            "node": "verificar_criar_deal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "verificar_criar_deal": {
+      "main": [
+        [
+          {
+            "node": "salvar_lead_metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "salvar_lead_metadata": {
+      "main": [
+        [
+          {
+            "node": "cancelar_follow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "colect_data3": {
+      "main": [
+        [
+          {
+            "node": "Call '[Sia One] [Buffer]'1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "cancelar_follow": {
+      "main": [
+        [
+          {
+            "node": "from me ?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "39c37eb3-2232-4547-ad1a-802a5152d3cf",
+  "meta": {
+    "instanceId": "7e44dba8003e8ae6a7e9a2d983d63ce1a03b6fc6d0baad5c615d2e5c3f6e4030"
+  },
+  "id": "iXbone1KrudCtit4C5V3b",
+  "tags": []
+}
