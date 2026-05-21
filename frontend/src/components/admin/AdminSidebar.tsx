@@ -8,14 +8,10 @@ import {
   Settings,
   ShieldHalf
 } from 'lucide-react';
-import { MOCK_TENANTS } from '../../pages/admin/adminMock';
-
-const TENANT_COUNT = MOCK_TENANTS.length;
-
 export const AdminSidebar: React.FC = () => {
 
   const navItems = [
-    { icon: <Building2 size={20} />, label: 'Tenants', to: '/admin/tenants', count: TENANT_COUNT },
+    { icon: <Building2 size={20} />, label: 'Tenants', to: '/admin/tenants' },
     { icon: <Users size={20} />, label: 'Usuários Globais', to: '/admin/users' },
     { icon: <Blocks size={20} />, label: 'Módulos', to: '/admin/modules' },
     { icon: <ShieldAlert size={20} />, label: 'Suporte & Ops', to: '/admin/support' },
@@ -55,11 +51,6 @@ export const AdminSidebar: React.FC = () => {
           >
             <span className="opacity-70 group-hover:opacity-100 transition-opacity">{item.icon}</span>
             <span className="flex-1">{item.label}</span>
-            {'count' in item && item.count !== undefined && (
-              <span className="text-[10px] font-mono bg-amber-500/10 text-amber-500/80 px-1.5 py-0.5 rounded tabular-nums">
-                {item.count}
-              </span>
-            )}
           </NavLink>
         ))}
       </nav>

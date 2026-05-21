@@ -2,7 +2,7 @@ import React from 'react';
 import { Zap } from 'lucide-react';
 import type { MockUser } from '../adminTypes';
 
-const ROLE_CFG = {
+const ROLE_CFG: Record<string, { label: string; classes: string }> = {
   admin:   { label: 'Admin',    classes: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
   manager: { label: 'Gerente',  classes: 'bg-zinc-500/10  text-zinc-400  border-zinc-500/20' },
   agent:   { label: 'Agente',   classes: 'bg-zinc-700/20  text-zinc-500  border-zinc-700/30' },

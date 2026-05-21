@@ -16,7 +16,8 @@ interface RankPodiumProps {
   onSelect: (id: string) => void;
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return '—';
   return new Date(iso).toLocaleDateString('pt-BR', { year: 'numeric', month: 'short' });
 }
 

@@ -1,4 +1,4 @@
-import type { TenantStatus, TenantPlan, AdminTenantRow, RealTenant } from './adminTypes';
+import type { TenantPlan, AdminTenantRow, RealTenant } from './adminTypes';
 
 export function formatBRL(value: number): string {
   return new Intl.NumberFormat('pt-BR', {

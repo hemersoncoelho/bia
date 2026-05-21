@@ -36,6 +36,9 @@ export interface AdminKpiGlobal {
   ai_managed_conversations: number;
 }
 
+export type MockTeam = { id: string; name: string; color: string; manager: string; memberCount: number };
+export type MockUser = { id: string; name: string; email: string; role: string; avatarInitials: string };
+
 /** Modelo canônico de tenant usado por todos os componentes de admin */
 export interface RealTenant {
   id: string;
