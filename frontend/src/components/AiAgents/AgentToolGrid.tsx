@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, Settings2, WifiOff, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Loader2, WifiOff, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { cn } from '../../lib/utils';
-import { AgentToolStatusBadge } from './AgentToolStatusBadge';
 import { AgentToolDrawer } from './AgentToolDrawer';
+import { AgentToolRow, TOOL_ISSUE_STATUSES } from './AgentToolRow';
 import type {
   AgentTool,
   AgentToolAsset,
@@ -13,7 +13,7 @@ import type {
   ToolReadinessStatus,
 } from '../../types';
 
-// ── Tipos internos ────────────────────────────────────────────
+// ── Tipos internos ────────────────────────────────────────────────
 
 interface CatalogRow {
   slug: string;
@@ -33,45 +33,28 @@ interface BindingRow {
   config: Record<string, unknown>;
 }
 
-// ── Metadados visuais por tipo de tool ────────────────────────
+// ── Metadados visuais por tipo ────────────────────────────────────
 
 const TYPE_META: Record<AgentToolType, { label: string; cls: string; barCls: string }> = {
-  agenda_action:     { label: 'Agenda',      cls: 'text-blue-400 bg-blue-500/10 border-blue-500/20',       barCls: 'bg-blue-500' },
-  crm_action:        { label: 'CRM',         cls: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20', barCls: 'bg-emerald-500' },
-  atendimento_action:{ label: 'Atendimento', cls: 'text-amber-400 bg-amber-500/10 border-amber-500/20',     barCls: 'bg-amber-500' },
-  media_action:      { label: 'Mídia',       cls: 'text-violet-400 bg-violet-500/10 border-violet-500/20',  barCls: 'bg-violet-500' },
-  knowledge_action:  { label: 'Conhecimento',cls: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',        barCls: 'bg-cyan-500' },
-  webhook_action:    { label: 'Webhook',     cls: 'text-orange-400 bg-orange-500/10 border-orange-500/20',  barCls: 'bg-orange-500' },
-  internal_action:   { label: 'Interno',     cls: 'text-stone-400 bg-stone-500/10 border-stone-500/20',     barCls: 'bg-stone-500' },
-  catalog_action:    { label: 'Catálogo',    cls: 'text-teal-400 bg-teal-500/10 border-teal-500/20',        barCls: 'bg-teal-500' },
+  agenda_action:      { label: 'Agenda',       cls: 'text-blue-400 bg-blue-500/10 border-blue-500/20',       barCls: 'bg-blue-500' },
+  crm_action:         { label: 'CRM',          cls: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20', barCls: 'bg-emerald-500' },
+  atendimento_action: { label: 'Atendimento',  cls: 'text-amber-400 bg-amber-500/10 border-amber-500/20',     barCls: 'bg-amber-500' },
+  media_action:       { label: 'Mídia',        cls: 'text-violet-400 bg-violet-500/10 border-violet-500/20',  barCls: 'bg-violet-500' },
+  knowledge_action:   { label: 'Conhecimento', cls: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',        barCls: 'bg-cyan-500' },
+  webhook_action:     { label: 'Webhook',      cls: 'text-orange-400 bg-orange-500/10 border-orange-500/20',  barCls: 'bg-orange-500' },
+  internal_action:    { label: 'Interno',      cls: 'text-stone-400 bg-stone-500/10 border-stone-500/20',     barCls: 'bg-stone-500' },
+  catalog_action:     { label: 'Catálogo',     cls: 'text-teal-400 bg-teal-500/10 border-teal-500/20',        barCls: 'bg-teal-500' },
 };
 
-const READINESS_BORDER: Record<ToolReadinessStatus, string> = {
-  ready:               'border-emerald-500/35 hover:border-emerald-500/60',
-  incomplete:          'border-yellow-500/35 hover:border-yellow-500/60',
-  inactive:            'border-border hover:border-stone-600',
-  blocked:             'border-orange-500/35 hover:border-orange-500/60',
-  integration_missing: 'border-red-500/35 hover:border-red-500/60',
-};
-
-/** Valores legados do catálogo (agent_tools_001) antes dos tipos semânticos. */
 const LEGACY_TOOL_TYPE_TO_META_KEY: Record<string, AgentToolType> = {
-  action: 'internal_action',
-  media: 'media_action',
-  webhook: 'webhook_action',
+  action:   'internal_action',
+  media:    'media_action',
+  webhook:  'webhook_action',
   internal: 'internal_action',
 };
 
-function resolveTypeMeta(raw: string | undefined | null): (typeof TYPE_META)[AgentToolType] {
-  const key = (raw ?? '').trim();
-  if (key && key in TYPE_META) return TYPE_META[key as AgentToolType];
-  const mapped = LEGACY_TOOL_TYPE_TO_META_KEY[key];
-  if (mapped) return TYPE_META[mapped];
-  return TYPE_META.internal_action;
-}
-
 function isToolReadinessStatus(v: string): v is ToolReadinessStatus {
-  return Object.prototype.hasOwnProperty.call(READINESS_BORDER, v);
+  return ['ready', 'incomplete', 'inactive', 'blocked', 'integration_missing'].includes(v);
 }
 
 function resolveReadiness(raw: string | undefined | null): ToolReadinessStatus {
@@ -89,7 +72,7 @@ const DEFAULT_CONTEXT: ToolContext = {
   productCatalogConfigured: false,
 };
 
-// ── Helpers de schema ─────────────────────────────────────────
+// ── Helpers de schema ─────────────────────────────────────────────
 
 const getDependsOn = (schema: Record<string, unknown>): string[] => {
   const raw = schema.depends_on;
@@ -179,7 +162,7 @@ const getDependencies = (
       key: 'agent_tool_assets',
       label: 'Assets da ferramenta',
       configured: countAssets > 0,
-      helpText: 'Faça upload de arquivos na Fase 3.',
+      helpText: 'Faça upload de arquivos na configuração.',
     },
     'storage.media': {
       key: 'storage.media',
@@ -208,15 +191,19 @@ const getDependencies = (
 };
 
 const computeReadiness = (
-  tool: { slug: string; tool_type: AgentToolType; is_enabled: boolean; config: Record<string, unknown>; config_schema: Record<string, unknown>; assets?: AgentTool['assets'] },
+  tool: {
+    slug: string;
+    tool_type: AgentToolType;
+    is_enabled: boolean;
+    config: Record<string, unknown>;
+    config_schema: Record<string, unknown>;
+    assets?: AgentTool['assets'];
+  },
   dependencies: ToolDependency[]
 ): ToolReadinessStatus => {
   if (!tool.is_enabled) return 'inactive';
 
-  if (
-    tool.tool_type === 'knowledge_action' &&
-    dependencies.some((d) => !d.configured)
-  ) {
+  if (tool.tool_type === 'knowledge_action' && dependencies.some((d) => !d.configured)) {
     return 'integration_missing';
   }
 
@@ -225,7 +212,6 @@ const computeReadiness = (
     return 'blocked';
   }
 
-  // Campos obrigatórios
   const fields = Array.isArray(tool.config_schema.fields)
     ? (tool.config_schema.fields as Array<{ key: string; required?: boolean }>)
     : [];
@@ -236,7 +222,6 @@ const computeReadiness = (
   });
   if (missingRequired) return 'incomplete';
 
-  // Assets de mídia
   if (
     (tool.slug === 'enviar_foto' || tool.slug === 'enviar_video') &&
     (tool.assets?.length ?? 0) === 0
@@ -249,50 +234,11 @@ const computeReadiness = (
   return 'ready';
 };
 
-// ── Toggle (cards) ────────────────────────────────────────────
+// ── Filtro ────────────────────────────────────────────────────────
 
-interface ToggleProps {
-  id: string;
-  checked: boolean;
-  loading?: boolean;
-  onChange: () => void;
-  onClick?: (e: React.MouseEvent) => void;
-}
+type ToolFilter = 'all' | 'active' | 'pending' | AgentToolType;
 
-const Toggle: React.FC<ToggleProps> = ({ id, checked, loading, onChange, onClick }) => (
-  <label
-    htmlFor={id}
-    className="relative inline-flex items-center cursor-pointer shrink-0"
-    onClick={onClick}
-  >
-    <input
-      id={id}
-      type="checkbox"
-      className="sr-only peer"
-      checked={checked}
-      onChange={onChange}
-      disabled={loading}
-    />
-    <div
-      className={cn(
-        'w-9 h-5 rounded-full transition-colors',
-        "after:content-[''] after:absolute after:top-0.5 after:left-0.5",
-        'after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all',
-        'peer-checked:after:translate-x-4',
-        checked ? 'bg-indigo-600' : 'bg-stone-700',
-        loading && 'opacity-60 cursor-not-allowed'
-      )}
-    />
-    {loading && (
-      <Loader2
-        size={10}
-        className="absolute inset-0 m-auto animate-spin text-white pointer-events-none"
-      />
-    )}
-  </label>
-);
-
-// ── Componente principal ──────────────────────────────────────
+// ── Componente principal ──────────────────────────────────────────
 
 interface AgentToolGridProps {
   agentId: string;
@@ -307,8 +253,9 @@ export const AgentToolGrid: React.FC<AgentToolGridProps> = ({ agentId, companyId
   const [toggling, setToggling] = useState<string | null>(null);
   const [selected, setSelected] = useState<AgentTool | null>(null);
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [filter, setFilter] = useState<ToolFilter>('all');
 
-  // ── Fetch ────────────────────────────────────────────────
+  // ── Fetch ─────────────────────────────────────────────────────
 
   const loadTools = useCallback(async () => {
     setLoading(true);
@@ -338,18 +285,18 @@ export const AgentToolGrid: React.FC<AgentToolGridProps> = ({ agentId, companyId
     const bMap = new Map(bindings.map((b) => [b.tool_slug, b]));
     const ctx = context ?? DEFAULT_CONTEXT;
 
-    // Busca assets dos bindings de mídia existentes
     const mediaBindingIds = bindings
       .filter((b) => b.tool_slug === 'enviar_foto' || b.tool_slug === 'enviar_video')
       .map((b) => b.id);
 
-    const assetsRes = mediaBindingIds.length > 0
-      ? await supabase
-          .from('agent_tool_assets')
-          .select('id, tool_slug, file_name, public_url, mime_type, label, sort_order')
-          .in('binding_id', mediaBindingIds)
-          .order('sort_order')
-      : { data: [] };
+    const assetsRes =
+      mediaBindingIds.length > 0
+        ? await supabase
+            .from('agent_tool_assets')
+            .select('id, tool_slug, file_name, public_url, mime_type, label, sort_order')
+            .in('binding_id', mediaBindingIds)
+            .order('sort_order')
+        : { data: [] };
 
     const assetsBySlug = new Map<string, AgentToolAsset[]>();
     for (const asset of (assetsRes.data ?? []) as (AgentToolAsset & { tool_slug: string })[]) {
@@ -397,7 +344,7 @@ export const AgentToolGrid: React.FC<AgentToolGridProps> = ({ agentId, companyId
     loadTools();
   }, [loadTools]);
 
-  // ── Toggle ───────────────────────────────────────────────
+  // ── Toggle ────────────────────────────────────────────────────
 
   const handleToggle = useCallback(
     async (slug: string) => {
@@ -441,7 +388,7 @@ export const AgentToolGrid: React.FC<AgentToolGridProps> = ({ agentId, companyId
     [tools, toggling, agentId, companyId, context]
   );
 
-  // ── Drawer ───────────────────────────────────────────────
+  // ── Drawer ────────────────────────────────────────────────────
 
   const openDrawer = (tool: AgentTool) => {
     setSelected(tool);
@@ -453,41 +400,88 @@ export const AgentToolGrid: React.FC<AgentToolGridProps> = ({ agentId, companyId
     setTimeout(() => setSelected(null), 220);
   };
 
-  const handleToolUpdated = useCallback((updated: Partial<AgentTool>) => {
-    setTools((prev) =>
-      prev.map((t) => {
-        if (t.slug !== selected?.slug) return t;
-        const next = { ...t, ...updated };
-        const dependencies = getDependencies(
-          t.config_schema,
-          t.assets,
-          context ?? DEFAULT_CONTEXT
-        );
-        return { ...next, dependencies, readiness: computeReadiness(next, dependencies) };
-      })
-    );
-    setSelected((s) =>
-      s
-        ? (() => {
-            const next = { ...s, ...updated };
-            const deps = getDependencies(
-              s.config_schema,
-              s.assets,
-              context ?? DEFAULT_CONTEXT
-            );
-            return { ...next, dependencies: deps, readiness: computeReadiness(next, deps) };
-          })()
-        : s
-    );
-  }, [selected?.slug, context]);
+  const handleToolUpdated = useCallback(
+    (updated: Partial<AgentTool>) => {
+      setTools((prev) =>
+        prev.map((t) => {
+          if (t.slug !== selected?.slug) return t;
+          const next = { ...t, ...updated };
+          const dependencies = getDependencies(
+            t.config_schema,
+            t.assets,
+            context ?? DEFAULT_CONTEXT
+          );
+          return { ...next, dependencies, readiness: computeReadiness(next, dependencies) };
+        })
+      );
+      setSelected((s) =>
+        s
+          ? (() => {
+              const next = { ...s, ...updated };
+              const deps = getDependencies(
+                s.config_schema,
+                s.assets,
+                context ?? DEFAULT_CONTEXT
+              );
+              return { ...next, dependencies: deps, readiness: computeReadiness(next, deps) };
+            })()
+          : s
+      );
+    },
+    [selected?.slug, context]
+  );
 
-  // ── Estados vazios / erro ─────────────────────────────────
+  // ── Dados derivados (hooks devem vir antes dos early returns) ──
+
+  const availableCategories = useMemo((): AgentToolType[] => {
+    const seen = new Set<AgentToolType>();
+    const ordered: AgentToolType[] = [];
+    for (const tool of tools) {
+      const key = (tool.tool_type ?? '').trim();
+      let cat: AgentToolType | undefined;
+      if (key && key in TYPE_META) cat = key as AgentToolType;
+      else if (LEGACY_TOOL_TYPE_TO_META_KEY[key]) cat = LEGACY_TOOL_TYPE_TO_META_KEY[key];
+      if (cat && !seen.has(cat)) {
+        seen.add(cat);
+        ordered.push(cat);
+      }
+    }
+    return ordered;
+  }, [tools]);
+
+  const filteredTools = useMemo(() => {
+    if (filter === 'all') return tools;
+    if (filter === 'active') return tools.filter((t) => t.is_enabled);
+    if (filter === 'pending')
+      return tools.filter(
+        (t) => t.is_enabled && TOOL_ISSUE_STATUSES.has(resolveReadiness(t.readiness))
+      );
+    return tools.filter((t) => {
+      const key = (t.tool_type ?? '').trim();
+      return key === filter || LEGACY_TOOL_TYPE_TO_META_KEY[key] === filter;
+    });
+  }, [tools, filter]);
+
+  // ── Estados de carregamento / erro ────────────────────────────
 
   if (loading) {
     return (
-      <div className="grid grid-cols-2 gap-3">
-        {[1, 2, 3, 4, 5, 6].map((i) => (
-          <div key={i} className="h-[120px] bg-surface border border-border rounded-xl animate-pulse" />
+      <div className="border border-border rounded-xl overflow-hidden">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div
+            key={i}
+            className="flex items-center gap-3 px-4 py-3 border-b border-border last:border-0 animate-pulse"
+          >
+            <div className="w-0.5 h-7 rounded-full bg-stone-800" />
+            <div className="w-5 h-5 rounded bg-stone-800" />
+            <div className="flex-1 space-y-1.5">
+              <div className="h-3 bg-stone-800 rounded w-28" />
+              <div className="h-2 bg-stone-800 rounded w-44" />
+            </div>
+            <div className="w-14 h-5 bg-stone-800 rounded-full" />
+            <div className="w-9 h-5 bg-stone-800 rounded-full" />
+            <div className="w-20 h-6 bg-stone-800 rounded-lg" />
+          </div>
         ))}
       </div>
     );
@@ -515,128 +509,171 @@ export const AgentToolGrid: React.FC<AgentToolGridProps> = ({ agentId, companyId
     );
   }
 
-  // ── Render principal ──────────────────────────────────────
+  // ── Dados derivados ───────────────────────────────────────────
 
   const enabledCount = tools.filter((t) => t.is_enabled).length;
   const readyCount = tools.filter((t) => t.readiness === 'ready').length;
-  const blockedCount = tools.filter(
-    (t) => t.readiness === 'blocked' || t.readiness === 'incomplete' || t.readiness === 'integration_missing'
+  const pendingCount = tools.filter(
+    (t) => t.is_enabled && TOOL_ISSUE_STATUSES.has(resolveReadiness(t.readiness))
   ).length;
+
+  const countFor = (f: ToolFilter): number => {
+    if (f === 'all') return tools.length;
+    if (f === 'active') return enabledCount;
+    if (f === 'pending') return pendingCount;
+    return tools.filter((t) => {
+      const key = (t.tool_type ?? '').trim();
+      return key === f || LEGACY_TOOL_TYPE_TO_META_KEY[key] === f;
+    }).length;
+  };
+
+  // ── Prontidão para publicação ─────────────────────────────────
+
+  const activeWithIssues = tools.filter(
+    (t) => t.is_enabled && TOOL_ISSUE_STATUSES.has(resolveReadiness(t.readiness))
+  );
+  const activeReady = tools.filter((t) => t.is_enabled && t.readiness === 'ready');
+
+  // ── Render ───────────────────────────────────────────────────
+
+  const STATIC_FILTERS: Array<{ id: ToolFilter; label: string }> = [
+    { id: 'all', label: 'Todas' },
+    { id: 'active', label: 'Ativas' },
+    { id: 'pending', label: 'Pendentes' },
+  ];
 
   return (
     <>
-      {/* Status summary */}
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        <span className="text-[11px] text-stone-500 mr-1">
-          {tools.length} ferramentas disponíveis
+      {/* Resumo de status */}
+      <div className="flex items-center gap-2 flex-wrap mb-3">
+        <span className="text-[11px] text-stone-500">
+          {tools.length} disponív{tools.length === 1 ? 'el' : 'eis'}
         </span>
+        <span className="text-stone-700">·</span>
+        {enabledCount > 0 ? (
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded-full px-2 py-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+            {enabledCount} ativa{enabledCount !== 1 ? 's' : ''}
+          </span>
+        ) : (
+          <span className="text-[10px] text-stone-600 italic">Nenhuma ativada</span>
+        )}
         {readyCount > 0 && (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
             {readyCount} pronta{readyCount !== 1 ? 's' : ''}
           </span>
         )}
-        {blockedCount > 0 && (
+        {pendingCount > 0 && (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-orange-400 bg-orange-500/10 border border-orange-500/20 rounded-full px-2 py-0.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />
-            {blockedCount} pendente{blockedCount !== 1 ? 's' : ''}
+            <AlertTriangle size={9} />
+            {pendingCount} pendente{pendingCount !== 1 ? 's' : ''}
           </span>
         )}
-        {enabledCount === 0 && (
-          <span className="text-[10px] text-stone-600 italic">
-            Nenhuma ativa — ative pelo toggle de cada card
-          </span>
-        )}
-        <span className="ml-auto text-[10px] text-stone-600 border border-border rounded-full px-2 py-0.5">
-          payload n8n por tool
-        </span>
       </div>
 
-      {/* Grid de cards */}
-      <div className="grid grid-cols-2 gap-3">
-        {tools.map((tool) => {
-          const meta = resolveTypeMeta(tool.tool_type);
-          const readiness = resolveReadiness(tool.readiness);
-          const borderCls = READINESS_BORDER[readiness];
-          const isToggling = toggling === tool.slug;
-          const missingDeps = (tool.dependencies ?? []).filter((d) => !d.configured);
-
+      {/* Filtros */}
+      <div className="flex items-center gap-1.5 flex-wrap mb-3">
+        {STATIC_FILTERS.map(({ id, label }) => {
+          const count = countFor(id);
+          const isActive = filter === id;
+          const isPending = id === 'pending';
           return (
             <button
-              key={tool.slug}
+              key={id}
               type="button"
-              onClick={() => openDrawer(tool)}
+              onClick={() => setFilter(id)}
               className={cn(
-                'group relative text-left bg-surface border rounded-xl overflow-hidden',
-                'transition-all duration-150 hover:shadow-lg hover:shadow-black/30 hover:-translate-y-0.5',
-                borderCls
+                'flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border transition-colors',
+                isActive
+                  ? isPending
+                    ? 'bg-orange-500/10 border-orange-500/30 text-orange-400'
+                    : 'bg-stone-700 border-stone-600 text-stone-100'
+                  : 'border-border text-stone-500 hover:text-stone-300 hover:border-stone-600'
               )}
             >
-              {/* Barra colorida por tipo */}
-              <div
-                className={cn(
-                  'h-0.5 w-full',
-                  meta.barCls,
-                  !tool.is_enabled && 'opacity-30'
-                )}
-              />
+              {label}
+              <span className={cn('text-[10px]', isActive ? 'opacity-70' : 'opacity-50')}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
 
-              <div className="p-4">
-                {/* Emoji + nome + toggle */}
-                <div className="flex items-start justify-between gap-2 mb-2.5">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xl leading-none select-none shrink-0">{tool.icon}</span>
-                    <div className="min-w-0">
-                      <span className="text-sm font-semibold text-primary leading-tight truncate block">
-                        {tool.name}
-                      </span>
-                      <span
-                        className={cn(
-                          'text-[10px] font-medium border rounded px-1.5 py-0 inline-block mt-0.5',
-                          meta.cls
-                        )}
-                      >
-                        {meta.label}
-                      </span>
-                    </div>
-                  </div>
-                  <Toggle
-                    id={`tool-toggle-card-${tool.slug}`}
-                    checked={tool.is_enabled}
-                    loading={isToggling}
-                    onChange={() => handleToggle(tool.slug)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </div>
-
-                {/* Status badge */}
-                <div className="mb-2.5">
-                  <AgentToolStatusBadge status={readiness} />
-                </div>
-
-                {/* Descrição */}
-                <p className="text-[11px] text-stone-500 leading-relaxed line-clamp-2">
-                  {tool.description}
-                </p>
-
-                {missingDeps.length > 0 && (
-                  <p className="mt-2 text-[10px] text-orange-400 flex items-center gap-1">
-                    <AlertTriangle size={10} />
-                    {missingDeps.length} dependência{missingDeps.length > 1 ? 's' : ''} pendente{missingDeps.length > 1 ? 's' : ''}
-                  </p>
-                )}
-
-                {/* Hint configurar (hover) */}
-                <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                  <Settings2 size={12} className="text-stone-600" />
-                </div>
-              </div>
+        {availableCategories.map((cat) => {
+          const meta = TYPE_META[cat];
+          const count = countFor(cat);
+          const isActive = filter === cat;
+          return (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setFilter(cat)}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border transition-colors',
+                isActive
+                  ? meta.cls + ' border-current/30'
+                  : 'border-border text-stone-500 hover:text-stone-300 hover:border-stone-600'
+              )}
+            >
+              {meta.label}
+              <span className="text-[10px] opacity-50">{count}</span>
             </button>
           );
         })}
       </div>
 
-      {/* Drawer */}
+      {/* Lista compacta de ferramentas */}
+      <div className="border border-border rounded-xl overflow-hidden bg-surface">
+        {filteredTools.length === 0 ? (
+          <div className="py-8 text-center">
+            <p className="text-sm text-stone-500">Nenhuma ferramenta neste filtro.</p>
+            <button
+              type="button"
+              onClick={() => setFilter('all')}
+              className="mt-2 text-xs text-stone-600 hover:text-stone-400 underline"
+            >
+              Ver todas
+            </button>
+          </div>
+        ) : (
+          filteredTools.map((tool) => (
+            <AgentToolRow
+              key={tool.slug}
+              tool={tool}
+              isToggling={toggling === tool.slug}
+              onToggle={() => handleToggle(tool.slug)}
+              onOpen={() => openDrawer(tool)}
+            />
+          ))
+        )}
+      </div>
+
+      {/* Aviso de prontidão para publicação */}
+      {enabledCount > 0 && (
+        activeWithIssues.length > 0 ? (
+          <div className="flex items-start gap-2 p-3 bg-orange-500/5 border border-orange-500/20 rounded-xl text-xs text-orange-400 mt-3">
+            <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+            <span>
+              <strong>{activeWithIssues.length}</strong>{' '}
+              ferramenta{activeWithIssues.length > 1 ? 's ativas com' : ' ativa com'} pendência
+              {activeWithIssues.length > 1 ? 's' : ''} —{' '}
+              {activeWithIssues.length > 1 ? 'elas não serão incluídas' : 'ela não será incluída'}{' '}
+              no payload enviado ao n8n até que as pendências sejam resolvidas.
+            </span>
+          </div>
+        ) : activeReady.length > 0 ? (
+          <div className="flex items-center gap-2 p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-xl text-xs text-emerald-400 mt-3">
+            <CheckCircle2 size={13} className="shrink-0" />
+            <span>
+              {activeReady.length} ferramenta{activeReady.length > 1 ? 's prontas' : ' pronta'}{' '}
+              — configuração completa para publicação.
+            </span>
+          </div>
+        ) : null
+      )}
+
+      {/* Drawer de configuração */}
       {selected && (
         <AgentToolDrawer
           tool={selected}

@@ -333,15 +333,15 @@ Regras:
           <div>
             <div className="flex items-center gap-2 mb-1">
               <h3 className="text-xs font-bold text-stone-300 uppercase tracking-widest">
-                Ferramentas
+                Ferramentas do Agente
               </h3>
               <span className="text-[10px] font-semibold text-indigo-400 bg-indigo-500/10 border border-indigo-500/25 rounded-full px-2 py-0.5 uppercase tracking-wider">
-                Proposta de valor
+                Capacidades
               </span>
             </div>
             <p className="text-[11px] text-stone-500 leading-relaxed">
-              Configure as ações do agente antes de publicar. Ferramentas com dependências
-              pendentes aparecem sinalizadas e não são enviadas ao n8n.
+              Defina o que o agente pode executar durante a conversa. Ferramentas com pendências
+              são sinalizadas e não são incluídas no payload do n8n até serem resolvidas.
             </p>
           </div>
         </div>
@@ -370,8 +370,9 @@ Regras:
           <div>
             <span className="text-sm font-semibold text-amber-400">Publicar Agente</span>
             <p className="text-[11px] text-stone-500 mt-0.5">
-              Agentes não publicados só aparecem na área de testes. Publique apenas quando estiver
-              satisfeito com o comportamento e ferramentas habilitadas.
+              Agentes não publicados só respondem na área de testes. Verifique o status das
+              ferramentas acima antes de publicar — ferramentas com pendências não serão enviadas
+              ao n8n.
             </p>
           </div>
         </div>

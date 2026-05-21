@@ -134,7 +134,14 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({ onClose, onSuccess })
         },
       });
 
-      if (res.error) throw new Error(res.error.message);
+      if (res.error) {
+        let errorMsg = res.error.message;
+        try {
+          const body = await (res.error as any).context?.json?.();
+          if (body?.error) errorMsg = body.error;
+        } catch {}
+        throw new Error(errorMsg);
+      }
       const data = res.data as { success: boolean; error?: string; user_id?: string };
       if (!data.success) throw new Error(data.error ?? 'Erro desconhecido.');
 

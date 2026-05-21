@@ -351,6 +351,7 @@ const MiniTask: React.FC<MiniTaskProps> = ({ task, onStatusChange }) => {
 
 interface AttendanceBadgeProps {
   mode: AttendanceMode;
+  humanName?: string;
   agentName?: string;
   agentActive?: boolean;
   agents: AiAgent[];
@@ -359,6 +360,7 @@ interface AttendanceBadgeProps {
 
 const AttendanceBadge: React.FC<AttendanceBadgeProps> = ({
   mode,
+  humanName,
   agentName,
   agentActive,
   agents,
@@ -366,6 +368,13 @@ const AttendanceBadge: React.FC<AttendanceBadgeProps> = ({
 }) => {
   const [open, setOpen] = useState(false);
   const cfg = MODE_CONFIG[mode];
+
+  const displayLabel =
+    mode === 'human' && humanName
+      ? humanName.split(' ')[0]
+      : mode === 'ai' && agentName
+      ? agentName
+      : cfg.label;
 
   return (
     <div className="relative">
@@ -375,10 +384,7 @@ const AttendanceBadge: React.FC<AttendanceBadgeProps> = ({
         className={`flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${cfg.bg} ${cfg.border} ${cfg.color}`}
       >
         {cfg.icon}
-        {cfg.label}
-        {agentName && mode !== 'human' && (
-          <span className="font-normal opacity-70 max-w-[80px] truncate">— {agentName}</span>
-        )}
+        {displayLabel}
         {mode === 'ai' && agentActive === false && (
           <span className="text-[9px] text-amber-400 font-mono uppercase">(inativo)</span>
         )}
@@ -1028,6 +1034,11 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
               console.warn('[rpc_assign_conversation] erro ao atribuir conversa:', assignError.message);
             }
           });
+
+        // 3. Vincula o deal ao humano que assumiu o atendimento
+        if (linkedDeal?.id) {
+          supabase.from('deals').update({ owner_user_id: user.id }).eq('id', linkedDeal.id);
+        }
       }
       supabase
         .from('conversations')
@@ -1055,7 +1066,10 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
 
     if (data?.success) {
       setCurrentMode(mode);
-      // Optimistically add the system event message to the timeline
+      // Quando humano assume o atendimento, vincula o deal a ele
+      if (mode === 'human' && user && linkedDeal?.id) {
+        supabase.from('deals').update({ owner_user_id: user.id }).eq('id', linkedDeal.id);
+      }
       const eventBody =
         mode === 'ai'
           ? 'Atendimento transferido para IA.'
@@ -1087,7 +1101,10 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
       p_user_id: userId,
     });
     if (data?.success !== false) {
-      // Evento de sistema na timeline para rastrear a transferência
+      // Vincula o deal ao novo responsável
+      if (linkedDeal?.id) {
+        supabase.from('deals').update({ owner_user_id: userId }).eq('id', linkedDeal.id);
+      }
       const sysMsg: Message = {
         id: `sys-${Date.now()}`,
         conversation_id: conversation.conversation_id,
@@ -1214,14 +1231,25 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
                 )}
               </h2>
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span
-                  className={`w-1.5 h-1.5 rounded-full ${isClosed ? 'bg-stone-600' : 'bg-emerald-500'}`}
-                />
-                <span className={`text-[10px] font-mono uppercase tracking-wider ${getAttendeeTextColor(conversation.assigned_to_name ?? '')}`}>
-                  {conversation.assigned_to_name
-                    ? `${conversation.assigned_to_name.split(' ')[0]}`
-                    : 'Não atribuído'}
-                </span>
+                {currentMode === 'ai' ? (
+                  <>
+                    <Bot size={10} className="text-indigo-400 shrink-0" />
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-indigo-400 truncate max-w-[140px]">
+                      {activeAgentForConv?.name ?? conversation.ai_agent_name ?? 'IA'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${isClosed ? 'bg-stone-600' : 'bg-emerald-500'}`}
+                    />
+                    <span className={`text-[10px] font-mono uppercase tracking-wider ${getAttendeeTextColor(conversation.assigned_to_name ?? '')}`}>
+                      {conversation.assigned_to_name
+                        ? `${conversation.assigned_to_name.split(' ')[0]}`
+                        : 'Não atribuído'}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -1231,6 +1259,7 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
             {!isClosed && (
               <AttendanceBadge
                 mode={currentMode}
+                humanName={conversation.assigned_to_name}
                 agentName={activeAgentForConv?.name ?? conversation.ai_agent_name}
                 agentActive={activeAgentForConv?.is_active ?? conversation.ai_agent_active}
                 agents={availableAgents}

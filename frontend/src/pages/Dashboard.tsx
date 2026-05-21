@@ -113,11 +113,7 @@ const CANAL_ICONS: Record<string, React.ReactNode> = {
 const fmt = (val: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(val);
 
-const fmtShort = (val: number): string => {
-  if (val >= 1_000_000) return `R$${(val / 1_000_000).toFixed(1)}M`;
-  if (val >= 1_000)     return `R$${(val / 1_000).toFixed(0)}k`;
-  return `R$${val.toFixed(0)}`;
-};
+const fmtShort = (val: number): string => fmt(val);
 
 function generateDateRange(fromDateStr: string): string[] {
   const result: string[] = [];
@@ -227,16 +223,7 @@ const HeroPill: React.FC<{
   </div>
 );
 
-// ── StatCard ──────────────────────────────────────────────────────
-
-const ACCENT_BG: Record<string, string> = {
-  'text-blue-400':    'bg-blue-400/10',
-  'text-violet-400':  'bg-violet-400/10',
-  'text-emerald-400': 'bg-emerald-400/10',
-  'text-rose-400':    'bg-rose-400/10',
-  'text-amber-400':   'bg-amber-400/10',
-  'text-orange-400':  'bg-orange-400/10',
-};
+// ── StatCard — Premium dark glass ────────────────────────────────
 
 const StatCard: React.FC<{
   title: string;
@@ -246,70 +233,116 @@ const StatCard: React.FC<{
   trend?: string;
   trendDir?: 'up' | 'down' | 'flat';
   accent?: string;
+  accentHex?: string;
   loading?: boolean;
   delay?: number;
-}> = ({ title, value, icon, subtitle, trend, trendDir, accent = 'text-zinc-400', loading, delay = 0 }) => {
+  sparkData?: { v: number }[];
+}> = ({ title, value, icon, trend, trendDir, accentHex = '#22D3EE', loading, delay = 0, sparkData }) => {
   const numValue  = typeof value === 'number' ? value : 0;
   const animated  = useCountUp(numValue, 800);
   const TrendIcon = trendDir === 'up' ? ArrowUpRight : trendDir === 'down' ? ArrowDownRight : Minus;
   const trendColor = trendDir === 'up'
     ? 'text-emerald-400'
     : trendDir === 'down'
-      ? 'text-rose-400'
-      : 'text-stone-400';
+    ? 'text-rose-400'
+    : 'text-zinc-600';
+  const sparkId = `sg-${title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}`;
 
   if (loading) {
     return (
       <div
-        className="card-animate rounded-2xl border border-[#E7E5E4] dark:border-white/[0.06] bg-white dark:bg-white/[0.025] animate-pulse h-[120px]"
-        style={{ animationDelay: `${delay}ms` }}
+        className="card-animate rounded-2xl border border-white/[0.06] bg-zinc-950 animate-pulse overflow-hidden"
+        style={{ animationDelay: `${delay}ms`, minHeight: 168 }}
       >
-        <div className="p-5 space-y-3">
-          <div className="flex justify-between">
-            <div className="h-2 bg-stone-100 dark:bg-white/[0.06] rounded w-24" />
-            <div className="w-8 h-8 bg-stone-100 dark:bg-white/[0.06] rounded-lg" />
+        <div className="p-5 space-y-4">
+          <div className="flex justify-between items-start">
+            <div className="h-2 rounded w-24 bg-white/[0.06]" />
+            <div className="w-8 h-8 rounded-xl bg-white/[0.06]" />
           </div>
-          <div className="h-8 bg-stone-50 dark:bg-white/[0.03] rounded w-20 mt-4" />
+          <div className="h-10 rounded w-20 bg-white/[0.04]" />
+          <div className="h-2 rounded w-28 bg-white/[0.04]" />
         </div>
+        <div className="h-14 bg-white/[0.02]" />
       </div>
     );
   }
 
-  const isZero     = typeof value === 'number' && value === 0;
-  const valueColor = isZero
-    ? 'text-stone-400 dark:text-zinc-600'
-    : 'text-stone-900 dark:text-white';
-  const iconBg     = ACCENT_BG[accent] ?? 'bg-stone-100 dark:bg-white/[0.05]';
+  const displayValue = typeof value === 'number'
+    ? animated.toLocaleString('pt-BR')
+    : value;
 
   return (
     <div
-      className="card-animate rounded-2xl border border-[#E7E5E4] dark:border-white/[0.06] bg-white dark:bg-white/[0.025] hover:scale-[1.02] hover:border-[#D6D3D1] dark:hover:border-white/[0.12] hover:bg-stone-50 dark:hover:bg-white/[0.04] transition-all duration-200 p-4 sm:p-5 flex flex-col gap-3 group cursor-default"
+      className="card-animate relative rounded-2xl border border-white/[0.08] bg-zinc-950 overflow-hidden transition-all duration-300 hover:border-white/[0.20] group cursor-default flex flex-col"
       style={{ animationDelay: `${delay}ms` }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-stone-500 dark:text-zinc-500">{title}</p>
-          {subtitle && <p className="text-[10px] text-stone-400 dark:text-zinc-600 mt-0.5">{subtitle}</p>}
+      {/* Radial glow accent top-right */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{ background: `radial-gradient(ellipse at 90% 5%, ${accentHex}22, transparent 60%)` }}
+      />
+
+      <div className="relative px-5 pt-5 pb-4 flex-1">
+        <div className="flex items-start justify-between mb-5 gap-2">
+          <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-zinc-500 leading-relaxed">
+            {title}
+          </p>
+          <div
+            className="p-2 rounded-xl shrink-0 transition-transform duration-200 group-hover:scale-110"
+            style={{ background: `${accentHex}20` }}
+          >
+            <span style={{ color: accentHex, display: 'flex' }}>{icon}</span>
+          </div>
         </div>
-        <div className={`p-2 rounded-xl shrink-0 ${accent} ${iconBg} transition-all duration-200 group-hover:scale-110`}>{icon}</div>
-      </div>
-      <div>
-        <p className={`text-3xl sm:text-4xl font-bold leading-none tabular-nums ${valueColor}`}>
-          {typeof value === 'number' ? animated.toLocaleString('pt-BR') : value}
+
+        <p
+          className="text-4xl font-black tabular-nums leading-none"
+          style={{ color: accentHex, filter: `drop-shadow(0 0 16px ${accentHex}55)` }}
+        >
+          {displayValue}
         </p>
+
         {trend && (
-          <div className={`flex items-center gap-1 mt-2 text-xs font-medium ${trendColor}`}>
-            <TrendIcon size={11} />
-            {trend}
+          <div className={`flex items-center gap-1 mt-3 text-xs font-medium ${trendColor}`}>
+            <TrendIcon size={12} />
+            <span className="font-semibold">{trend}</span>
+            <span className="text-zinc-600 font-normal ml-0.5">vs. mês anterior</span>
           </div>
         )}
-        {isZero && !trend && (
-          <div className="flex items-center gap-1 mt-2 text-xs font-medium text-emerald-500">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+        {!trend && typeof value === 'number' && value === 0 && (
+          <div className="flex items-center gap-1.5 mt-3 text-xs font-medium text-emerald-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" />
             Em dia
           </div>
         )}
       </div>
+
+      {/* Sparkline at the bottom */}
+      {sparkData && sparkData.length > 2 ? (
+        <div className="h-16 w-full mt-1">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={sparkData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id={sparkId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={accentHex} stopOpacity={0.4} />
+                  <stop offset="100%" stopColor={accentHex} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <Area
+                type="monotone"
+                dataKey="v"
+                stroke={accentHex}
+                strokeWidth={2}
+                fill={`url(#${sparkId})`}
+                dot={false}
+                activeDot={false}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <div className="h-4" />
+      )}
     </div>
   );
 };
@@ -863,6 +896,11 @@ export const Dashboard: React.FC = () => {
   // Animated pipeline value for hero
   const animatedPipeline = useCountUp(commercial?.pipelineValue ?? 0, 1000);
 
+  // Sparklines for KPI cards (derived from daily trend data)
+  const pipelineSparkData = trend.map(p => ({ v: p.openPipelineAmount }));
+  const newDealsSparkData  = trend.map(p => ({ v: p.newDeals }));
+  const wonDealsSparkData  = trend.map(p => ({ v: p.wonDeals }));
+
   if (!currentCompany) return (
     <div className="p-8 text-stone-500 font-mono uppercase text-xs tracking-widest text-center mt-20">
       Nenhuma empresa no contexto.
@@ -1058,46 +1096,44 @@ export const Dashboard: React.FC = () => {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <StatCard
           title="Mensagens Trocadas"
-          subtitle="No período"
-          value={kpis?.total_messages.toLocaleString('pt-BR') ?? '—'}
+          value={kpis?.total_messages ?? 0}
           icon={<MessageSquare size={15} />}
-          accent="text-blue-400"
+          accentHex="#22D3EE"
           loading={loading}
           delay={0}
+          sparkData={pipelineSparkData}
         />
         <StatCard
           title="Leads Novos"
-          subtitle="No período"
-          value={kpis?.total_leads ?? '—'}
+          value={kpis?.total_leads ?? 0}
           icon={<Target size={15} />}
-          accent="text-violet-400"
+          accentHex="#8B5CF6"
           loading={loading}
           delay={60}
+          sparkData={newDealsSparkData}
         />
         <StatCard
           title="Conversas Abertas"
-          subtitle="Agora"
-          value={kpis?.open_conversations ?? '—'}
+          value={kpis?.open_conversations ?? 0}
           icon={<Inbox size={15} />}
-          accent="text-blue-400"
+          accentHex="#3B82F6"
           loading={loading}
           delay={120}
         />
         <StatCard
           title="Leads Qualificados"
-          subtitle="Agora"
-          value={kpis?.qualified_leads ?? '—'}
+          value={kpis?.qualified_leads ?? 0}
           icon={<BadgeCheck size={15} />}
-          accent="text-emerald-400"
+          accentHex="#10B981"
           loading={loading}
           delay={180}
+          sparkData={wonDealsSparkData}
         />
         <StatCard
-          title="Agendamentos Realizados"
-          subtitle="No período"
-          value={kpis?.completed_appointments ?? '—'}
+          title="Agendamentos"
+          value={kpis?.completed_appointments ?? 0}
           icon={<BadgeCheck size={15} />}
-          accent="text-emerald-400"
+          accentHex="#F97316"
           loading={loading}
           delay={240}
         />
