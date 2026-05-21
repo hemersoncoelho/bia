@@ -11,10 +11,10 @@
             "id": "292f7f8fdc39038a",
             "type": "leaf",
             "state": {
-              "type": "empty",
+              "type": "graph",
               "state": {},
-              "icon": "lucide-file",
-              "title": "Nova aba"
+              "icon": "lucide-git-fork",
+              "title": "Visualização em gráfico"
             }
           }
         ]
@@ -37,7 +37,7 @@
               "type": "file-explorer",
               "state": {
                 "sortOrder": "alphabetical",
-                "autoReveal": false
+                "autoReveal": true
               },
               "icon": "lucide-folder-closed",
               "title": "Explorador de arquivos"
@@ -178,17 +178,19 @@
   },
   "active": "292f7f8fdc39038a",
   "lastOpenFiles": [
-    "frontend/src/pages/Dashboard.tsx.tmp.37328.ef96892a6798",
-    "frontend/src/pages/Dashboard.tsx.tmp.37328.40facd628d99",
-    "frontend/src/pages/Dashboard.tsx.tmp.37328.d593f2173067",
-    "frontend/src/pages/Dashboard.tsx.tmp.37328.6efe232457b1",
-    "frontend/src/pages/Dashboard.tsx.tmp.37328.b1ab1ff5040b",
-    "frontend/src/pages/Dashboard.tsx.tmp.37328.5fb371acfad6",
-    "frontend/src/pages/Dashboard.tsx.tmp.37328.0d1949df8524",
-    "frontend/src/pages/Dashboard.tsx.tmp.37328.7f2b98234f82",
-    "frontend/src/pages/Dashboard.tsx.tmp.37328.8941acea6c9b",
-    "frontend/src/pages/Dashboard.tsx.tmp.37328.0635879faad6",
-    "frontend/src/pages/Dashboard.tsx.tmp.37328.1e7ae4daf75c",
+    "frontend/dist/assets/zap-off-B5FDomM9.js",
+    "frontend/dist/assets/useDebounce-CNDIV_YS.js",
+    "frontend/dist/assets/triangle-alert-CBDxka65.js",
+    "frontend/dist/assets/trash-2-BDbaWqIe.js",
+    "frontend/dist/assets/toggle-right-DWx18gaZ.js",
+    "frontend/dist/assets/settings-2-DJvds-Ua.js",
+    "frontend/dist/assets/send-CB4rOc4B.js",
+    "frontend/dist/assets/save-DR1lGz7l.js",
+    "frontend/dist/assets/react-dom-CK1423cD.js",
+    "frontend/dist/assets/plus-D89a_0Dm.js",
+    "frontend/dist/assets/pencil-ln7n4nnj.js",
+    "frontend/supabase-migrations/ai_agent_contract_v1.md",
+    "Imagem colada.png",
     "frontend/node_modules/victory-vendor/CHANGELOG.md",
     "frontend/node_modules/react-dom/README.md",
     "frontend/node_modules/flatted/golang/README.md",

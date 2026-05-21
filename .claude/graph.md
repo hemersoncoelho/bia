@@ -1,5 +1,5 @@
 # Graph — SalesIA
-_gerado: 2026-05-13_
+_gerado: 2026-05-15_
 
 ## Rotas
 /login · /select-company
