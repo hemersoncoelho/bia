@@ -599,12 +599,11 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
               },
               handoff_keywords: cfg.handoff_keywords ?? [],
               handoff_after_mins: cfg.handoff_after_mins ?? null,
-              // is_published vive apenas no config JSONB (não é coluna top-level)
               is_published: (cfg.is_published as boolean) ?? false,
             };
           })
-          // Filtra client-side: só agentes publicados aparecem no dropdown
-          .filter((a) => a.is_published) as AiAgent[]
+          // Filtra client-side: só agentes ativos aparecem no dropdown de atribuição manual
+          .filter((a) => a.is_active) as AiAgent[]
       );
     }
   }, [currentCompany]);
