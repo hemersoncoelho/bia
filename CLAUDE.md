@@ -163,7 +163,7 @@ Localizadas em `supabase/functions/`. Cada função:
 | `pipelines` / `pipeline_stages` / `deals` | Pipeline do CRM |
 | `tasks` | Tarefas vinculadas a contatos/deals |
 | `teams` | Times de agentes dentro de uma empresa |
-| `ai_agents` | Configuração do agente de IA por empresa (model, system_prompt, scope, is_active) |
+| `ai_agents` | Configuração do agente de IA por empresa (`model_provider`, `model_name`, `system_prompt`, `is_active`). **`is_published`, `scope`, `handoff_keywords`, `handoff_after_mins` vivem no JSONB `config`** — não são colunas top-level. |
 | `ai_agent_bindings` | Vincula agentes de IA a canais ou conversas específicas |
 | `audit_logs` | Trilha de auditoria imutável |
 | `kpi_company_daily_snapshots` | Snapshots diários de KPIs para analytics |
@@ -301,15 +301,22 @@ const notifyCount = useCallback((list) => { onCountChangeRef.current(...); }, []
 - `product_catalog.service_type_id` (nullable FK) — elo entre o catálogo e o módulo de agenda. Quando preenchido, o agente usa esse `service_type_id` diretamente ao chamar `buscar_agenda` ou `agendar`.
 - Não misturar os dois módulos: agenda usa `service_types`, agente de IA usa `product_catalog`.
 
-Agentes de IA são configurados por empresa na tabela `ai_agents` e orquestrados via n8n:
+Agentes de IA são configurados por empresa na tabela `ai_agents` e orquestrados via n8n.
 
-- **`is_active`** — ativa/desativa o agente (via `rpc_toggle_ai_agent`)
-- **`is_published`** — false = modo rascunho/teste apenas
+**Schema real confirmado via banco** — colunas top-level:
+`id`, `company_id`, `name`, `slug` (NOT NULL), `description`, `system_prompt`, `operating_instructions`, `model_provider` (NOT NULL), `model_name` (NOT NULL), `temperature` (default 0.7), `max_tokens`, `handoff_enabled` (default true), `is_active` (default true), `config` (JSONB, default `{}`), `created_at`, `updated_at`
+
+> ⚠️ **`is_published` NÃO é coluna top-level** — vive exclusivamente no JSONB `config` como `config->>'is_published'`. Ao fazer `select(...)` na tabela, não inclua `is_published` como coluna; leia sempre via `(row.config as any).is_published`.
+
+Campos-chave:
+- **`is_active`** — ativa/desativa o agente (via `rpc_toggle_ai_agent`). É a flag usada pelo n8n (`rpc_get_active_ai_agent` filtra apenas por `is_active = true`).
+- **`config.is_published`** — `false` = modo rascunho/teste; controla visibilidade na UI de edição. **Não usar para filtrar dropdown de atribuição no Inbox** — use `is_active`.
 - **`system_prompt`** — mensagem de sistema completa injetada no LLM
-- **`model`** — string do modelo (ex: `gpt-4o-mini`, `gpt-4.1-mini`)
-- **`provider`** — enum: `openai`, `anthropic`, `google`, `custom`
-- **`scope`** — JSONB: `{ channels: [], auto_reply: bool }`
-- **`handoff_keywords`** / **`handoff_after_mins`** — gatilhos para transferência ao humano
+- **`model_provider`** / **`model_name`** — provider e modelo (mapeados no frontend para `provider` / `model`)
+- **`config.scope`** — `{ channels: [], auto_reply: bool }`
+- **`config.handoff_keywords`** / **`config.handoff_after_mins`** — gatilhos para transferência ao humano
+
+**Dropdown de atribuição manual no Inbox (`ConversationDetail`):** filtra agentes por `is_active`, não por `is_published` — alinhado com o comportamento do n8n. Qualquer agente ativo aparece no dropdown independente de estar publicado.
 
 Conversas carregam `attendance_mode` (`human` | `ai` | `hybrid`) e `ai_agent_id` para roteamento das mensagens.
 
@@ -319,9 +326,9 @@ Quatro workflows formam o pipeline completo (exports JSON na raiz do projeto):
 
 | Arquivo | Workflow | Papel |
 |---------|----------|-------|
-| *(não exportado)* | Messages | Recebe webhook da UAZAPI → normaliza → salva em `channel_events_raw` |
+| `[Sia One] [Messages] [Nao-Oficial].json` | Messages | Recebe webhook da UAZAPI → normaliza (`sender_name` correto em `fromMe`, expõe `from_me`, `was_sent_by_api`, `instance_owner_phone`) → salva em `channel_events_raw` |
 | *(workflow buffer)* | Buffer | Debounce de mensagens rápidas, agrupa em uma única invocação de IA |
-| *(não exportado)* | IA - Comercial | Busca config do agente via `rpc_get_active_ai_agent` → executa LLM → envia via UAZAPI → salva via `rpc_save_ai_message` |
+| `[Sia One] [IA - Comercial].json` | IA - Comercial | Busca config do agente via `rpc_get_active_ai_agent` → executa LLM → envia via UAZAPI → salva via `rpc_save_ai_message` |
 | `[Sia One] [Outbound - Human].json` | Outbound - Human | Envia mensagem de agente humano via UAZAPI e persiste via `rpc_save_human_message` |
 
 **Resolução dinâmica de `company_id` no n8n:**
@@ -486,5 +493,6 @@ O `AuthContext` usa `onAuthStateChange` como **única** fonte de eventos de sess
 
 **Eventos ignorados:** `TOKEN_REFRESHED` e `SIGNED_IN` são ignorados se `profileLoadedRef.current === true` — evita loop de timeout a cada rotação de token.
 
-## Convenções de Commit
-Commits seguem os prefixos `feat:`, `fix:`, `refactor:`. Mensagens de commit são escritas em português.
+## Git
+- Remote: `https://github.com/hemersoncoelho/siaone.git` (repositório foi renomeado de `bia` para `siaone` em mai/2026 — atualize com `git remote set-url origin https://github.com/hemersoncoelho/siaone.git` se necessário)
+- Commits seguem os prefixos `feat:`, `fix:`, `refactor:`. Mensagens de commit são escritas em português.
