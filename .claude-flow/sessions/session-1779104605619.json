@@ -1,0 +1,14 @@
+{
+  "id": "session-1779104605619",
+  "startedAt": "2026-05-18T11:43:25.619Z",
+  "cwd": "/home/hemersoncoelho/Documentos/SalesIA",
+  "context": {},
+  "metrics": {
+    "edits": 11,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "endedAt": "2026-05-18T15:35:50.800Z",
+  "duration": 13945198
+}

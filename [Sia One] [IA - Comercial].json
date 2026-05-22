@@ -8,23 +8,23 @@
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
       "position": [
-        -2432,
-        1824
+        3904,
+        3968
       ],
       "id": "55f15d2a-c36b-422d-8a60-28f2f7420dfa",
       "name": "When Executed by Another Workflow"
     },
     {
       "parameters": {
-        "jsCode": "const mensagem = $json[\"mensagem\"];\nconst agentResponse = $('JSON ASSISTANT MENSAGEM2').first().json.content || '';\nconst abreviacoes = ['Dra.', 'Sr.', 'Sra.', 'Dr.', 'Prof.', '1.', '2.', '3.', '4.'];\n\n// Função para verificar se um caractere é um emoji\nconst contemEmoji = (texto) => {\n  const regexEmoji = /[\\uD83C-\\uDBFF\\uDC00-\\uDFFF]+/g;\n  return regexEmoji.test(texto);\n};\n\n// Regex para identificar pontos de divisão, considerando abreviações\nconst regex = new RegExp(\n  `(?<!\\\\b(?:${abreviacoes.map(abreviacao => abreviacao.replace('.', '\\\\.')).join('|')}))(?<=[\"\".!?])\\\\s+`\n);\n\nlet partes = mensagem.split(regex);\n\n// Função para verificar se a última palavra de uma frase é uma abreviação\nconst ultimaPalavraEhAbreviacao = (frase) => {\n  const palavras = frase.trim().split(' ');\n  const ultimaPalavra = palavras[palavras.length - 1];\n  return abreviacoes.includes(ultimaPalavra);\n};\n\n// Ajusta a divisão para casos onde a frase termina com uma abreviação\nfor (let i = 1; i < partes.length; i++) {\n  if (ultimaPalavraEhAbreviacao(partes[i - 1])) {\n    partes[i - 1] += ' ' + partes[i];\n    partes.splice(i, 1);\n    i--; // Ajusta o índice após a remoção do elemento\n  }\n}\n\n// Função para combinar frases curtas em uma única parte\nconst combinarFrasesCurtas = (partes) => {\n  const combinadas = [];\n  let buffer = '';\n\n  for (let i = 0; i < partes.length; i++) {\n    buffer += partes[i].trim();\n    // Combina frases menores que 40 caracteres com a próxima, ou se houver emojis\n    if (i < partes.length - 1 && (partes[i].trim().length < 40 || contemEmoji(partes[i].trim()))) {\n      buffer += ' ';\n    } else {\n      combinadas.push(buffer);\n      buffer = '';\n    }\n  }\n\n  if (buffer.length > 0) {\n    combinadas.push(buffer);\n  }\n\n  return combinadas;\n};\n\npartes = combinarFrasesCurtas(partes);\n\n// Função para remover formatação de links\nconst removerFormatacaoLink = (texto) => {\n  const regexLinkFormatado = /\\[.*?\\]\\((.*?)\\)/g;\n  return texto.replace(regexLinkFormatado, '$1');\n};\n\n// Retorna as partes como uma array, removendo partes vazias ou apenas com espaços\nconst resultado = partes\n  .filter(parte => parte.trim() !== '') // Remove partes vazias\n  .map(parte => ({ mensagem: removerFormatacaoLink(parte.trim()), agent_response: agentResponse })); // Remove formatação de links e espaços em branco no início e fim\n\nreturn resultado;"
+        "jsCode": "const mensagem = $json[\"mensagem\"];\nconst agentResponse = $('JSON ASSISTANT MENSAGEM').first().json.content || '';\nconst abreviacoes = ['Dra.', 'Sr.', 'Sra.', 'Dr.', 'Prof.', '1.', '2.', '3.', '4.'];\n\n// Função para verificar se um caractere é um emoji\nconst contemEmoji = (texto) => {\n  const regexEmoji = /[\\uD83C-\\uDBFF\\uDC00-\\uDFFF]+/g;\n  return regexEmoji.test(texto);\n};\n\n// Regex para identificar pontos de divisão, considerando abreviações\nconst regex = new RegExp(\n  `(?<!\\\\b(?:${abreviacoes.map(abreviacao => abreviacao.replace('.', '\\\\.')).join('|')}))(?<=[\"\".!?])\\\\s+`\n);\n\nlet partes = mensagem.split(regex);\n\n// Função para verificar se a última palavra de uma frase é uma abreviação\nconst ultimaPalavraEhAbreviacao = (frase) => {\n  const palavras = frase.trim().split(' ');\n  const ultimaPalavra = palavras[palavras.length - 1];\n  return abreviacoes.includes(ultimaPalavra);\n};\n\n// Ajusta a divisão para casos onde a frase termina com uma abreviação\nfor (let i = 1; i < partes.length; i++) {\n  if (ultimaPalavraEhAbreviacao(partes[i - 1])) {\n    partes[i - 1] += ' ' + partes[i];\n    partes.splice(i, 1);\n    i--;\n  }\n}\n\n// Função para combinar frases curtas em uma única parte\nconst combinarFrasesCurtas = (partes) => {\n  const combinadas = [];\n  let buffer = '';\n\n  for (let i = 0; i < partes.length; i++) {\n    buffer += partes[i].trim();\n    if (i < partes.length - 1 && (partes[i].trim().length < 40 || contemEmoji(partes[i].trim()))) {\n      buffer += ' ';\n    } else {\n      combinadas.push(buffer);\n      buffer = '';\n    }\n  }\n\n  if (buffer.length > 0) {\n    combinadas.push(buffer);\n  }\n\n  return combinadas;\n};\n\npartes = combinarFrasesCurtas(partes);\n\n// Função para remover formatação de links\nconst removerFormatacaoLink = (texto) => {\n  const regexLinkFormatado = /\\[.*?\\]\\((.*?)\\)/g;\n  return texto.replace(regexLinkFormatado, '$1');\n};\n\nconst resultado = partes\n  .filter(parte => parte.trim() !== '')\n  .map(parte => ({ mensagem: removerFormatacaoLink(parte.trim()), agent_response: agentResponse }));\n\nreturn resultado;"
       },
-      "id": "28d61734-27c1-41a5-904c-df3b8ee3d282",
-      "name": "Separa Msg2",
+      "id": "a2262a49-a42c-4207-88a1-f4eaf4a3f00d",
+      "name": "Separa Msg",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1312,
-        2144
+        5072,
+        4272
       ]
     },
     {
@@ -32,11 +32,11 @@
       "type": "n8n-nodes-base.limit",
       "typeVersion": 1,
       "position": [
-        -896,
-        2016
+        5488,
+        4144
       ],
-      "id": "44a23a11-f8d3-4a3f-b934-a41178acfc08",
-      "name": "Limit2"
+      "id": "8c04ef83-7c3b-4e92-bc0b-22b018d78c11",
+      "name": "Limit"
     },
     {
       "parameters": {
@@ -51,7 +51,7 @@
             },
             {
               "name": "token",
-              "value": "d1e13950-5789-4cc3-9461-388bc0397535"
+              "value": "={{ $('When Executed by Another Workflow').item.json.instance }}"
             }
           ]
         },
@@ -60,7 +60,7 @@
           "parameters": [
             {
               "name": "number",
-              "value": "=558898325848"
+              "value": "={{ $('prepara_contexto_agent').item.json.phone }}"
             },
             {
               "name": "text",
@@ -68,7 +68,11 @@
             },
             {
               "name": "delay",
-              "value": "1500"
+              "value": "2000"
+            },
+            {
+              "name": "readchat",
+              "value": "true"
             }
           ]
         },
@@ -77,24 +81,23 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -880,
-        2256
+        5504,
+        4384
       ],
-      "id": "4368a6dd-54c1-466b-84a1-641874656419",
-      "name": "msg2",
-      "disabled": true
+      "id": "95d6f8b1-db1b-4d28-b87c-8e63d0e26f64",
+      "name": "msg"
     },
     {
       "parameters": {
         "amount": 2
       },
-      "id": "f20be4dd-ff13-452c-a378-0533854464a5",
-      "name": "Wait2",
+      "id": "f18e613b-5ab5-4b19-9e79-3f31e10885af",
+      "name": "Wait",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        -512,
-        2256
+        5872,
+        4384
       ],
       "webhookId": "eb1e13bd-1ebf-48bd-923a-9faece1949bf"
     },
@@ -102,13 +105,13 @@
       "parameters": {
         "options": {}
       },
-      "id": "ec16cc9c-810e-48d6-8eba-a69eafffcf47",
-      "name": "Loop Over Items2",
+      "id": "f8f975bd-8ff5-4660-b8f0-1ffffeeb81b2",
+      "name": "Loop Over Items",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [
-        -1104,
-        2144
+        5280,
+        4272
       ]
     },
     {
@@ -125,13 +128,13 @@
         },
         "options": {}
       },
-      "id": "4011f7a7-0710-4975-ab73-4c1bd7fb300c",
-      "name": "Edit Fields7",
+      "id": "744b3c28-bed2-4412-9dbc-8bb04c8547ad",
+      "name": "Edit Fields",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -1536,
-        2144
+        4848,
+        4272
       ]
     },
     {
@@ -154,13 +157,13 @@
         },
         "options": {}
       },
-      "id": "60a21019-88c0-4885-9cbf-8236cbdc4728",
-      "name": "JSON ASSISTANT MENSAGEM2",
+      "id": "882878e1-b51e-496a-a252-7d03404620dd",
+      "name": "JSON ASSISTANT MENSAGEM",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -1760,
-        2144
+        4624,
+        4272
       ]
     },
     {
@@ -172,11 +175,11 @@
       "type": "@n8n/n8n-nodes-langchain.memoryRedisChat",
       "typeVersion": 1.4,
       "position": [
-        -2560,
-        2368
+        3824,
+        4496
       ],
-      "id": "786e1ebc-464b-4cd4-9795-0c2faad571e7",
-      "name": "Redis Chat Memory2",
+      "id": "cc870d49-123d-411a-8510-855f05de4536",
+      "name": "Redis Chat Memory",
       "credentials": {
         "redis": {
           "id": "YLWGefNBa88e0d12",
@@ -199,11 +202,11 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.2,
       "position": [
-        -2704,
-        2368
+        3680,
+        4496
       ],
-      "id": "831a3733-6092-4f09-ae0e-62a8591bebc2",
-      "name": "OpenAI2",
+      "id": "29ab92de-137b-42c3-9ad8-54398dae7e1e",
+      "name": "OpenAI",
       "credentials": {
         "openAiApi": {
           "id": "1dOXhDaqEqdVNGVp",
@@ -233,11 +236,11 @@
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
       "position": [
-        -1760,
-        2368
+        4624,
+        4496
       ],
-      "id": "f9741c2b-efef-4d89-81d5-b1ae72a567f7",
-      "name": "enviar_video2"
+      "id": "c53528a8-2c96-443c-802f-dff6dfa94199",
+      "name": "enviar_video"
     },
     {
       "parameters": {
@@ -268,11 +271,11 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
       "position": [
-        -2096,
-        1840
+        4288,
+        3968
       ],
-      "id": "7217e0d5-fce4-4348-8c48-fed903dda936",
-      "name": "prompt_agent2",
+      "id": "8bcc9ea1-adde-4071-b51e-7e1afe04528b",
+      "name": "prompt_agent",
       "credentials": {
         "httpCustomAuth": {
           "id": "jFcbndpnIaED8qfx",
@@ -303,11 +306,11 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
       "position": [
-        -704,
-        2256
+        5680,
+        4384
       ],
-      "id": "60b88ed1-8460-4548-9d2d-857e02ed7a6b",
-      "name": "inbout_message2",
+      "id": "e0d0c730-81d6-463d-b88b-ee35053cdab1",
+      "name": "inbout_message",
       "alwaysOutputData": true,
       "credentials": {
         "httpCustomAuth": {
@@ -351,23 +354,23 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -1760,
-        1840
+        4624,
+        3968
       ],
-      "id": "fca59737-37ef-4a19-8309-f74caa367704",
-      "name": "normaliza_input2"
+      "id": "6edf7e92-88a5-49f2-aee5-9121f80dd87c",
+      "name": "normaliza_input"
     },
     {
       "parameters": {
-        "jsCode": "// Prepara o contexto completo do agent incluindo tools disponíveis\nconst input = $('When Executed by Another Workflow').item.json;\nconst agentConfig = $('prompt_agent2').item.json;\n\nconst tools_disponiveis = input.tools_disponiveis ?? '';\nconst tools_json = input.tools_json ?? [];\n\n// Monta bloco de contexto de tools para o prompt\nlet toolsBlock = '';\nif (tools_disponiveis) {\n  toolsBlock += `\\n\\n## TOOLS DISPONÍVEIS NESTE CONTEXTO\\nVocê pode chamar APENAS as seguintes tools: ${tools_disponiveis}\\nNão invente tools que não estejam nessa lista.`;\n}\nif (tools_json && tools_json.length > 0) {\n  toolsBlock += `\\n\\n## DESCRIÇÃO DETALHADA DAS TOOLS\\n`;\n  for (const tool of tools_json) {\n    toolsBlock += `\\n### ${tool.name}\\n`;\n    if (tool.label) toolsBlock += `Label: ${tool.label}\\n`;\n    if (tool.description) toolsBlock += `Descrição: ${tool.description}\\n`;\n    if (tool.when_to_use) toolsBlock += `Quando usar: ${tool.when_to_use}\\n`;\n    if (tool.input_schema) toolsBlock += `Parâmetros esperados: ${JSON.stringify(tool.input_schema)}\\n`;\n  }\n}\n\nreturn [{\n  json: {\n    role: input.role,\n    content: input.content,\n    company_id: input.company_id,\n    sender_name: input.sender_name ?? '',\n    phone: input.message?.phone ?? '',\n    tools_disponiveis,\n    tools_json,\n    tools_context_block: toolsBlock,\n    agent: agentConfig\n  }\n}];"
+        "jsCode": "// Prepara o contexto completo do agent incluindo tools disponíveis\nconst input = $('When Executed by Another Workflow').item.json;\nconst agentConfig = $('prompt_agent').item.json;\n\nconst tools_disponiveis = input.tools_disponiveis ?? '';\nconst tools_json = input.tools_json ?? [];\n\n// Monta bloco de contexto de tools para o prompt\nlet toolsBlock = '';\nif (tools_disponiveis) {\n  toolsBlock += `\\n\\n## TOOLS DISPONÍVEIS NESTE CONTEXTO\\nVocê pode chamar APENAS as seguintes tools: ${tools_disponiveis}\\nNão invente tools que não estejam nessa lista.`;\n}\nif (tools_json && tools_json.length > 0) {\n  toolsBlock += `\\n\\n## DESCRIÇÃO DETALHADA DAS TOOLS\\n`;\n  for (const tool of tools_json) {\n    toolsBlock += `\\n### ${tool.name}\\n`;\n    if (tool.label) toolsBlock += `Label: ${tool.label}\\n`;\n    if (tool.description) toolsBlock += `Descrição: ${tool.description}\\n`;\n    if (tool.when_to_use) toolsBlock += `Quando usar: ${tool.when_to_use}\\n`;\n    if (tool.input_schema) toolsBlock += `Parâmetros esperados: ${JSON.stringify(tool.input_schema)}\\n`;\n  }\n}\n\nreturn [{\n  json: {\n    role: input.role,\n    content: input.content,\n    company_id: input.company_id,\n    contact_id: input.contact_id ?? null,\n    conversation_id: input.conversation_id ?? null,\n    sender_name: input.sender_name ?? '',\n    phone: input.message?.phone ?? '',\n    tools_disponiveis,\n    tools_json,\n    tools_context_block: toolsBlock,\n    agent: agentConfig\n  }\n}];"
       },
-      "id": "60164d05-6363-4fea-98b5-3530249b0294",
-      "name": "prepara_contexto_agent2",
+      "id": "f485502c-8291-46df-b907-fa63556c589a",
+      "name": "prepara_contexto_agent",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -2432,
-        2144
+        3952,
+        4272
       ]
     },
     {
@@ -402,11 +405,11 @@
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
       "position": [
-        -2240,
-        2368
+        4144,
+        4496
       ],
-      "id": "c4760e51-129d-4b74-ba48-096b48bb3b9d",
-      "name": "tool_buscar_horarios_disponiveis2"
+      "id": "25e446e2-6c6b-4fcf-b942-e65852b2429a",
+      "name": "tool_buscar_horarios_disponiveis"
     },
     {
       "parameters": {
@@ -426,11 +429,11 @@
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
       "position": [
-        -1600,
-        2368
+        4784,
+        4496
       ],
-      "id": "5f831c7d-00e0-45da-8bfc-7b58b5dcf767",
-      "name": "tool_transferir_atendimento2"
+      "id": "d67c6f8d-0e23-466e-b8a3-754867815560",
+      "name": "tool_transferir_atendimento"
     },
     {
       "parameters": {
@@ -450,11 +453,11 @@
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
       "position": [
-        -1424,
-        2368
+        4960,
+        4496
       ],
-      "id": "04273fa8-862e-4417-a414-d68ebd473e6b",
-      "name": "tool_mover_crm2"
+      "id": "fe327087-d1b9-4160-8365-995dad26442f",
+      "name": "tool_mover_crm"
     },
     {
       "parameters": {
@@ -473,11 +476,11 @@
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
       "position": [
-        -1248,
-        2368
+        5136,
+        4496
       ],
-      "id": "8c2652e5-7b5c-440d-8695-c9f51214fa97",
-      "name": "tool_busca_conhecimento2"
+      "id": "9628b60e-9b2a-44a6-8904-646aab0f1edf",
+      "name": "tool_busca_conhecimento"
     },
     {
       "parameters": {
@@ -497,28 +500,28 @@
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
       "position": [
-        -2400,
-        2368
+        3984,
+        4496
       ],
-      "id": "8d565377-7d8f-4f65-8517-6849b91acd2d",
-      "name": "tool_agendar2"
+      "id": "c1cbcf13-0167-4e6d-bb33-f9d4e69076e3",
+      "name": "tool_agendar"
     },
     {
       "parameters": {
         "promptType": "define",
         "text": "=1. Nova mensagem recebida do usuário\n{{ $json.content }}\n2. [DATA_ATUAL] = {{ $now.toString() }}\n3. Nunca envie o contexto para o usuário, apenas a resposta final para whatsapp\n4. Tools disponiveis: {{ $json.agent.tools_disponiveis }}, tool_listar_servicos",
         "options": {
-          "systemMessage": "={{ $('prompt_agent2').item.json.agent.system_prompt }}\n\n# Tools\n\n```json\n{{JSON.stringify($json.agent.tools_json,null,2)}}"
+          "systemMessage": "={{ $('prompt_agent').item.json.agent.system_prompt }}\n\n# Tools\n\n```json\n{{JSON.stringify($json.agent.tools_json,null,2)}}"
         }
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.7,
       "position": [
-        -2176,
-        2144
+        4208,
+        4272
       ],
-      "id": "2f9c74c0-739d-4d5b-af1d-3d7d06b71dac",
-      "name": "Sia One - IA2"
+      "id": "a7504739-d7d7-479a-a3f7-00b23cb4d7e6",
+      "name": "Sia One - IA"
     },
     {
       "parameters": {
@@ -542,11 +545,11 @@
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
       "position": [
-        -1904,
-        2368
+        4480,
+        4496
       ],
-      "id": "11372de3-b4d8-4134-ade8-34e5531c9fb0",
-      "name": "chamar_equipe2"
+      "id": "c0a52cf2-5d4e-46c2-919b-30e8d89e7594",
+      "name": "chamar_equipe"
     },
     {
       "parameters": {
@@ -571,249 +574,45 @@
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
       "position": [
-        -2064,
-        2368
+        4320,
+        4496
       ],
-      "id": "2983ac7f-5c45-46a9-961d-f88b165ff2c7",
-      "name": "buscar_produtos_servicos2"
+      "id": "2fe01782-3a28-423f-ad14-9a5fdf6b3d53",
+      "name": "buscar_produtos_servicos"
     },
     {
       "parameters": {
-        "jsCode": "const ctx   = $('prepara_contexto_agent2').first().json;\nconst input = $input.first().json;\nconst company_id      = ctx.company_id      || null;\nconst contact_id      = ctx.contact_id      || input.contact_id      || null;\nconst conversation_id = ctx.conversation_id || input.conversation_id || null;\nlet buffered_user_message = '';\nlet agent_response = '';\ntry { buffered_user_message = $('normaliza_input2').first().json.content || ''; } catch(e) {}\ntry { agent_response = $('Sia One - IA2').first().json.output || ''; } catch(e) {}\n\n// Lê síntese gerada pelo nó sintetiza_conversa_llm1\nlet sintese = {};\ntry {\n  const rawSintese = $('sintetiza_conversa_llm1').first().json;\n  const sintesContent = rawSintese && rawSintese.choices && rawSintese.choices[0] && rawSintese.choices[0].message\n    ? rawSintese.choices[0].message.content\n    : '{}';\n  sintese = JSON.parse(sintesContent);\n} catch(e) { sintese = {}; }\n\nconst current_time = new Date().toISOString();\nconst can_create_trigger = !!company_id;\n\nconst system_prompt = 'Você é um agente operacional do Sia One responsável por decidir se a conversa deve ser monitorada para follow-up futuro.\\n\\n'\n  + 'Você NÃO envia WhatsApp. Você NÃO cria tarefa diretamente. Você NÃO executa cadência.\\n'\n  + 'Você recebe a síntese completa da conversa e decide se merece um trigger de follow-up.\\n\\n'\n  + 'Tipos de trigger disponíveis (trigger_type):\\n'\n  + '- no_response_after_ai_question\\n'\n  + '- no_response_after_human_message\\n'\n  + '- third_party_decision_followup\\n'\n  + '- asked_to_return_later\\n'\n  + '- qualification_abandoned\\n'\n  + '- post_quote_followup\\n'\n  + '- no_followup_needed\\n\\n'\n  + 'Eventos detectados possíveis (detected_event):\\n'\n  + '- awaiting_contact_reply\\n'\n  + '- qualification_question_sent\\n'\n  + '- appointment_question_sent\\n'\n  + '- quote_sent_waiting_reply\\n'\n  + '- third_party_decision\\n'\n  + '- asked_to_return_later\\n'\n  + '- price_objection\\n'\n  + '- no_followup_needed\\n\\n'\n  + 'Regras:\\n'\n  + '- Se a conversa não espera resposta: should_create_trigger = false\\n'\n  + '- Se confidence < 0.65: should_create_trigger = false\\n'\n  + '- Use o evento_principal da síntese para guiar o detected_event\\n'\n  + '- Responda SEMPRE em JSON válido com todos os campos abaixo';\n\nconst sintese_str = sintese.resumo\n  ? 'Estágio: ' + (sintese.estagio || '?') + '\\n'\n    + 'Resumo: ' + sintese.resumo + '\\n'\n    + 'Última ação IA: ' + (sintese.ultima_acao_ia || '?') + '\\n'\n    + 'Última ação humano: ' + (sintese.ultima_acao_humano || 'nenhuma') + '\\n'\n    + 'Resposta pendente: ' + (sintese.resposta_pendente_do_contato ? 'SIM' : 'NÃO') + '\\n'\n    + 'Orçamento enviado: ' + (sintese.orcamento_ou_proposta_enviada ? 'SIM' : 'NÃO') + '\\n'\n    + 'Pediu para retornar: ' + (sintese.contato_pediu_para_retornar ? 'SIM' : 'NÃO') + '\\n'\n    + 'Decisor terceiro: ' + (sintese.decisor_terceiro_mencionado ? 'SIM' : 'NÃO') + '\\n'\n    + 'Engajamento: ' + (sintese.nivel_engajamento || '?') + '\\n'\n    + 'Objeção: ' + (sintese.objecao_detectada || 'nenhuma') + '\\n'\n    + 'Evento principal: ' + (sintese.evento_principal || '?')\n  : '(síntese não disponível — usando apenas última troca)';\n\nconst user_content = 'Momento atual: ' + current_time + '\\n\\n'\n  + '=== SÍNTESE DA CONVERSA ===\\n'\n  + sintese_str + '\\n\\n'\n  + '=== ÚLTIMA TROCA ===\\n'\n  + 'Contato: ' + buffered_user_message + '\\n'\n  + 'IA: ' + agent_response + '\\n\\n'\n  + 'Responda com JSON exatamente neste formato:\\n'\n  + '{\\n'\n  + '  \"should_create_trigger\": true,\\n'\n  + '  \"trigger_type\": \"no_response_after_ai_question\",\\n'\n  + '  \"detected_event\": \"awaiting_contact_reply\",\\n'\n  + '  \"expected_reply_window_minutes\": 60,\\n'\n  + '  \"reason\": \"string\",\\n'\n  + '  \"recommended_action\": \"string\",\\n'\n  + '  \"recommended_followup_message\": \"string\",\\n'\n  + '  \"confidence\": 0.85,\\n'\n  + '  \"metadata\": {}\\n'\n  + '}';\n\nconst llm_payload = {\n  model: 'gpt-4.1-mini',\n  temperature: 0,\n  response_format: { type: 'json_object' },\n  messages: [\n    { role: 'system', content: system_prompt },\n    { role: 'user',   content: user_content  }\n  ]\n};\n\nreturn [{\n  json: {\n    company_id,\n    contact_id,\n    conversation_id,\n    buffered_user_message,\n    agent_response,\n    current_time,\n    can_create_trigger,\n    sintese,\n    llm_payload\n  }\n}];\n"
+        "jsCode": "const trigger = $('When Executed by Another Workflow').item.json;\nconst ctx = $('prepara_contexto_agent').first().json;\n\nreturn [{\n  json: {\n    company_id:              trigger.company_id      || ctx.company_id      || null,\n    contact_id:              trigger.contact_id      || ctx.contact_id      || null,\n    conversation_id:         trigger.conversation_id || ctx.conversation_id || null,\n    buffered_user_message:   $('normaliza_input').first().json.content || '',\n    agent_response:          $('Sia One - IA').first().json.output || ''\n  }\n}];"
       },
+      "id": "prep-followup-payload-001",
+      "name": "prepara_payload_followup",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -704,
-        2016
-      ],
-      "id": "a1977a58-f3de-4a4a-b8f9-808bf348e4ad",
-      "name": "prepara_followup_decision1"
+        5696,
+        4144
+      ]
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 3
-          },
-          "conditions": [
-            {
-              "id": "b2c3d4e5-f6a7-8901-bcde-f01234567890",
-              "leftValue": "={{ $json.can_create_trigger }}",
-              "rightValue": "",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
+        "workflowId": {
+          "__rl": true,
+          "value": "[Sia One] [Followup]",
+          "mode": "name",
+          "cachedResultName": "[Sia One] [Followup]"
         },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        -496,
-        2016
-      ],
-      "id": "96966836-dd0f-4c00-8d02-c0354cec3740",
-      "name": "check_can_create_trigger1"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.openai.com/v1/chat/completions",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "openAiApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.llm_payload) }}",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.3,
-      "position": [
-        -288,
-        2000
-      ],
-      "id": "f805b146-fdc6-43b6-8605-16ec31cfc4f8",
-      "name": "followup_trigger_llm1",
-      "alwaysOutputData": true,
-      "credentials": {
-        "openAiApi": {
-          "id": "1dOXhDaqEqdVNGVp",
-          "name": "OpenAI - Sales"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "const raw = $input.first().json;\nconst prep = $('prepara_followup_decision1').first().json;\n\nlet decision = {};\ntry {\n  const content = raw.choices && raw.choices[0] && raw.choices[0].message && raw.choices[0].message.content ? raw.choices[0].message.content : '{}';\n  decision = JSON.parse(content);\n} catch(e) {\n  decision = { should_create_trigger: false, confidence: 0, reason: 'parse_error: ' + e.message };\n}\n\nconst confidence = parseFloat(decision.confidence || 0);\nconst shouldCreate = decision.should_create_trigger === true && confidence >= 0.65;\nconst windowMinutes = parseInt(decision.expected_reply_window_minutes || 1440);\nconst expectedReplyUntil = new Date(Date.now() + windowMinutes * 60 * 1000).toISOString();\n\nreturn [{\n  json: {\n    should_create_trigger: shouldCreate,\n    trigger_type: decision.trigger_type || 'no_response_after_ai_question',\n    detected_event: decision.detected_event || 'awaiting_contact_reply',\n    expected_reply_window_minutes: windowMinutes,\n    expected_reply_until: expectedReplyUntil,\n    reason: decision.reason || '',\n    recommended_action: decision.recommended_action || '',\n    recommended_followup_message: decision.recommended_followup_message || '',\n    confidence: confidence,\n    metadata: decision.metadata || {},\n    company_id: prep.company_id,\n    contact_id: prep.contact_id,\n    conversation_id: prep.conversation_id\n  }\n}];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -80,
-        2000
-      ],
-      "id": "08f9cf8d-ad96-43a9-966a-5808192345ea",
-      "name": "parse_followup_decision1"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 3
-          },
-          "conditions": [
-            {
-              "id": "f6a7b8c9-d0e1-2345-fabc-345678901234",
-              "leftValue": "={{ $json.should_create_trigger }}",
-              "rightValue": "",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        128,
-        2000
-      ],
-      "id": "b4a0d384-b3ed-4a00-af96-0f133385dce7",
-      "name": "check_should_create_trigger1"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_create_conversation_followup_trigger",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpCustomAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  p_company_id:         $json.company_id,\n  p_contact_id:         $json.contact_id,\n  p_conversation_id:    $json.conversation_id,\n  p_trigger_type:       $json.trigger_type,\n  p_expected_reply_until: $json.expected_reply_until,\n  p_created_from_message_id: null,\n  p_detected_event:     $json.detected_event,\n  p_reason:             $json.reason,\n  p_recommended_action: $json.recommended_action,\n  p_recommended_message: $json.recommended_followup_message,\n  p_ai_confidence:      $json.confidence,\n  p_metadata:           $json.metadata || {}\n}) }}",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.3,
-      "position": [
-        352,
-        1936
-      ],
-      "id": "68612180-f36c-487f-ba3b-63756f13df98",
-      "name": "create_followup_trigger1",
-      "alwaysOutputData": true,
-      "credentials": {
-        "httpCustomAuth": {
-          "id": "jFcbndpnIaED8qfx",
-          "name": "Supabase API"
-        }
-      }
-    },
-    {
-      "parameters": {},
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [
-        -112,
-        2224
-      ],
-      "id": "bccb73cf-3425-445f-8f36-62d36631ea45",
-      "name": "followup_noop1"
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "={{ 'https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/messages?conversation_id=eq.' + $('prepara_contexto_agent2').first().json.conversation_id + '&order=created_at.desc&limit=20&select=id,role,content,created_at' }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpCustomAuth",
         "options": {
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          }
+          "waitForSubWorkflow": false
         }
       },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.3,
+      "id": "exec-followup-workflow-001",
+      "name": "execute_followup_workflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
       "position": [
-        -896,
-        2420
-      ],
-      "id": "b1c2d3e4-f5a6-7890-bcde-f01234567890",
-      "name": "busca_historico_conversa1",
-      "alwaysOutputData": true,
-      "credentials": {
-        "httpCustomAuth": {
-          "id": "jFcbndpnIaED8qfx",
-          "name": "Supabase API"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "const ctx = $('prepara_contexto_agent2').first().json;\nconst company_id = ctx.company_id || null;\nconst contact_id = ctx.contact_id || null;\nconst conversation_id = ctx.conversation_id || null;\nlet buffered_user_message = '';\nlet agent_response = '';\ntry { buffered_user_message = $('normaliza_input2').first().json.content || ''; } catch(e) {}\ntry { agent_response = $('Sia One - IA2').first().json.output || ''; } catch(e) {}\nconst allItems = $input.all();\nlet messages = [];\ntry {\n  if (allItems.length === 1 && Array.isArray(allItems[0].json)) {\n    messages = allItems[0].json;\n  } else {\n    messages = allItems.map(i => i.json).filter(m => m && m.content);\n  }\n} catch(e) { messages = []; }\nmessages.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));\nconst recent = messages.slice(-15);\nconst roleLabel = (msg) => {\n  const r = (msg.role || '').toLowerCase();\n  if (r === 'assistant' || r === 'ai') return 'IA';\n  if (r === 'agent' || r === 'human_agent') return 'Agente Humano';\n  return 'Contato';\n};\nconst lines = recent.map(msg => {\n  const t = msg.created_at\n    ? new Date(msg.created_at).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})\n    : '??:??';\n  return '[' + t + '] ' + roleLabel(msg) + ': ' + (msg.content || '').substring(0, 400);\n});\nif (buffered_user_message) lines.push('[AGORA] Contato: ' + buffered_user_message);\nif (agent_response) lines.push('[AGORA] IA: ' + agent_response);\nconst fullTranscript = lines.join('\\n');\nconst schemaLines = [\n  '{',\n  '  \"estagio\": \"prospecção|qualificação|proposta|negociação|fechamento|suporte\",',\n  '  \"resumo\": \"2-3 frases sobre o estado atual\",',\n  '  \"ultima_acao_ia\": \"o que a IA fez por último\",',\n  '  \"ultima_acao_humano\": null,',\n  '  \"resposta_pendente_do_contato\": true,',\n  '  \"orcamento_ou_proposta_enviada\": false,',\n  '  \"contato_pediu_para_retornar\": false,',\n  '  \"decisor_terceiro_mencionado\": false,',\n  '  \"nivel_engajamento\": \"alto|médio|baixo|desengajado\",',\n  '  \"objecao_detectada\": null,',\n  '  \"evento_principal\": \"awaiting_contact_reply|qualification_question_sent|appointment_question_sent|quote_sent_waiting_reply|third_party_decision|asked_to_return_later|price_objection|no_followup_needed\"',\n  '}'\n];\nconst system_prompt = 'Você é um analista de conversas comerciais. Sintetize o histórico e identifique o estado atual da negociação.\\n\\nResponda APENAS com JSON neste formato:\\n' + schemaLines.join('\\n');\nconst llm_payload = {\n  model: 'gpt-4.1-mini',\n  temperature: 0,\n  response_format: { type: 'json_object' },\n  messages: [\n    { role: 'system', content: system_prompt },\n    { role: 'user', content: 'Histórico (' + recent.length + ' msgs):\\n\\n' + (fullTranscript || '(sem histórico)') }\n  ]\n};\nreturn [{\n  json: {\n    company_id, contact_id, conversation_id,\n    buffered_user_message, agent_response,\n    llm_payload, messages_analyzed: recent.length\n  }\n}];\n"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -640,
-        2420
-      ],
-      "id": "c2d3e4f5-a6b7-8901-cdef-012345678901",
-      "name": "monta_sintese_payload1"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.openai.com/v1/chat/completions",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "openAiApi",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.llm_payload) }}",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.3,
-      "position": [
-        -384,
-        2420
-      ],
-      "id": "d3e4f5a6-b7c8-9012-defa-123456789012",
-      "name": "sintetiza_conversa_llm1",
-      "alwaysOutputData": true,
-      "credentials": {
-        "openAiApi": {
-          "id": "1dOXhDaqEqdVNGVp",
-          "name": "OpenAI - Sales"
-        }
-      }
+        5904,
+        4144
+      ]
     }
   ],
   "pinData": {
@@ -821,12 +620,16 @@
       {
         "json": {
           "role": "user",
-          "content": "vou falar com minha esposa",
+          "content": "Já treino",
           "message": {
-            "phone": "5527996402271"
+            "phone": "558898325848"
           },
-          "sender_name": "Moisés Coradelo",
-          "company_id": "f5de34df-432f-4c67-a879-542278a86bf1"
+          "sender_name": "Hemerson Coelho",
+          "company_id": "b9f12661-cdce-48f7-abd0-1dcc341cd878",
+          "instance": "afaf87cc-8880-4a78-9937-5008d7c00ee3"
+        },
+        "pairedItem": {
+          "item": 0
         }
       }
     ]
@@ -836,358 +639,267 @@
       "main": [
         [
           {
-            "node": "prompt_agent2",
+            "node": "prompt_agent",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Separa Msg2": {
+    "Separa Msg": {
       "main": [
         [
           {
-            "node": "Loop Over Items2",
+            "node": "Loop Over Items",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Limit2": {
+    "Limit": {
       "main": [
         [
           {
-            "node": "busca_historico_conversa1",
+            "node": "prepara_payload_followup",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "msg2": {
+    "msg": {
       "main": [
         [
           {
-            "node": "inbout_message2",
+            "node": "inbout_message",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Wait2": {
+    "Wait": {
       "main": [
         [
           {
-            "node": "Loop Over Items2",
+            "node": "Loop Over Items",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Loop Over Items2": {
+    "Loop Over Items": {
       "main": [
         [
           {
-            "node": "Limit2",
+            "node": "Limit",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "msg2",
+            "node": "msg",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Edit Fields7": {
+    "Edit Fields": {
       "main": [
         [
           {
-            "node": "Separa Msg2",
+            "node": "Separa Msg",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "JSON ASSISTANT MENSAGEM2": {
+    "JSON ASSISTANT MENSAGEM": {
       "main": [
         [
           {
-            "node": "Edit Fields7",
+            "node": "Edit Fields",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Redis Chat Memory2": {
+    "Redis Chat Memory": {
       "ai_memory": [
         [
           {
-            "node": "Sia One - IA2",
+            "node": "Sia One - IA",
             "type": "ai_memory",
             "index": 0
           }
         ]
       ]
     },
-    "OpenAI2": {
+    "OpenAI": {
       "ai_languageModel": [
         [
           {
-            "node": "Sia One - IA2",
+            "node": "Sia One - IA",
             "type": "ai_languageModel",
             "index": 0
           }
         ]
       ]
     },
-    "enviar_video2": {
+    "enviar_video": {
       "ai_tool": [
         [
           {
-            "node": "Sia One - IA2",
+            "node": "Sia One - IA",
             "type": "ai_tool",
             "index": 0
           }
         ]
       ]
     },
-    "prompt_agent2": {
+    "prompt_agent": {
       "main": [
         [
           {
-            "node": "normaliza_input2",
+            "node": "normaliza_input",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "inbout_message2": {
+    "inbout_message": {
       "main": [
         [
           {
-            "node": "Wait2",
+            "node": "Wait",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "normaliza_input2": {
+    "normaliza_input": {
       "main": [
         [
           {
-            "node": "prepara_contexto_agent2",
+            "node": "prepara_contexto_agent",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "prepara_contexto_agent2": {
+    "prepara_contexto_agent": {
       "main": [
         [
           {
-            "node": "Sia One - IA2",
+            "node": "Sia One - IA",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "tool_buscar_horarios_disponiveis2": {
+    "tool_buscar_horarios_disponiveis": {
       "ai_tool": [
         [
           {
-            "node": "Sia One - IA2",
+            "node": "Sia One - IA",
             "type": "ai_tool",
             "index": 0
           }
         ]
       ]
     },
-    "tool_transferir_atendimento2": {
+    "tool_transferir_atendimento": {
       "ai_tool": [
         [
           {
-            "node": "Sia One - IA2",
+            "node": "Sia One - IA",
             "type": "ai_tool",
             "index": 0
           }
         ]
       ]
     },
-    "tool_mover_crm2": {
+    "tool_mover_crm": {
       "ai_tool": [
         [
           {
-            "node": "Sia One - IA2",
+            "node": "Sia One - IA",
             "type": "ai_tool",
             "index": 0
           }
         ]
       ]
     },
-    "tool_busca_conhecimento2": {
+    "tool_busca_conhecimento": {
       "ai_tool": [
         [
           {
-            "node": "Sia One - IA2",
+            "node": "Sia One - IA",
             "type": "ai_tool",
             "index": 0
           }
         ]
       ]
     },
-    "tool_agendar2": {
+    "tool_agendar": {
       "ai_tool": [
         [
           {
-            "node": "Sia One - IA2",
+            "node": "Sia One - IA",
             "type": "ai_tool",
             "index": 0
           }
         ]
       ]
     },
-    "Sia One - IA2": {
+    "Sia One - IA": {
       "main": [
         [
           {
-            "node": "JSON ASSISTANT MENSAGEM2",
+            "node": "JSON ASSISTANT MENSAGEM",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "chamar_equipe2": {
+    "chamar_equipe": {
       "ai_tool": [
         [
           {
-            "node": "Sia One - IA2",
+            "node": "Sia One - IA",
             "type": "ai_tool",
             "index": 0
           }
         ]
       ]
     },
-    "buscar_produtos_servicos2": {
+    "buscar_produtos_servicos": {
       "ai_tool": [
         [
           {
-            "node": "Sia One - IA2",
+            "node": "Sia One - IA",
             "type": "ai_tool",
             "index": 0
           }
         ]
       ]
     },
-    "prepara_followup_decision1": {
+    "prepara_payload_followup": {
       "main": [
         [
           {
-            "node": "check_can_create_trigger1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "check_can_create_trigger1": {
-      "main": [
-        [
-          {
-            "node": "followup_trigger_llm1",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "followup_noop1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "followup_trigger_llm1": {
-      "main": [
-        [
-          {
-            "node": "parse_followup_decision1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "parse_followup_decision1": {
-      "main": [
-        [
-          {
-            "node": "check_should_create_trigger1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "check_should_create_trigger1": {
-      "main": [
-        [
-          {
-            "node": "create_followup_trigger1",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "followup_noop1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "busca_historico_conversa1": {
-      "main": [
-        [
-          {
-            "node": "monta_sintese_payload1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "monta_sintese_payload1": {
-      "main": [
-        [
-          {
-            "node": "sintetiza_conversa_llm1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "sintetiza_conversa_llm1": {
-      "main": [
-        [
-          {
-            "node": "prepara_followup_decision1",
+            "node": "execute_followup_workflow",
             "type": "main",
             "index": 0
           }
@@ -1201,7 +913,7 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "3d3d15a3-774d-4e35-bd7f-df89a6328425",
+  "versionId": "3b0e9957-3be1-42e1-820d-2817e4aa632b",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "7e44dba8003e8ae6a7e9a2d983d63ce1a03b6fc6d0baad5c615d2e5c3f6e4030"

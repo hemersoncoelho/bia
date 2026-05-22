@@ -27,6 +27,8 @@ import { useTenant } from '../../contexts/TenantContext';
 import { Timeline } from './Timeline';
 import { Composer } from './Composer';
 import { NotesList } from '../Notes/NotesList';
+import { useFollowUpState } from '../../hooks/useFollowUpState';
+import { FollowUpPanel } from '../FollowUp/FollowUpPanel';
 import type { Task, TaskStatus, AiAgent, AttendanceMode, Message, Deal, DealStatus } from '../../types';
 
 type LinkedDeal = Pick<Deal, 'id' | 'title' | 'amount' | 'status' | 'loss_reason' | 'closed_at'>;
@@ -557,6 +559,22 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
   useEffect(() => {
     setCurrentMode(conversation?.attendance_mode ?? 'human');
   }, [conversation?.attendance_mode]);
+
+  // Follow-up state
+  const {
+    data: followUpData,
+    history: followUpHistory,
+    isLoading: followUpLoading,
+    error: followUpError,
+    stopCycle: stopFollowUpCycle,
+  } = useFollowUpState({
+    contactId: conversation?.contact_id ?? null,
+    conversationId: conversation?.conversation_id ?? null,
+  });
+
+  const handleStopFollowUpCycle = async () => {
+    await stopFollowUpCycle('manual_cancel');
+  };
 
   // Fetch available published agents for handoff dropdown
   const fetchAgents = useCallback(async () => {
@@ -1733,6 +1751,23 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
                     </div>
                   )}
                 </CollapsibleSection>
+
+              {/* ── Follow-ups ── */}
+              {conversation.contact_id && (
+                <CollapsibleSection
+                  label="Follow-ups"
+                  defaultOpen={false}
+                >
+                  <FollowUpPanel
+                    data={followUpData}
+                    history={followUpHistory}
+                    isLoading={followUpLoading}
+                    error={followUpError}
+                    onStopCycle={handleStopFollowUpCycle}
+                    canManage={true}
+                  />
+                </CollapsibleSection>
+              )}
 
               </div>
             )}

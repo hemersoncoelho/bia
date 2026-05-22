@@ -40,11 +40,19 @@ export const Inbox: React.FC = () => {
   const debouncedSearch = useDebounce(searchQuery, 250);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>(DEFAULT_ADVANCED_FILTERS);
-  
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [initialSendError, setInitialSendError] = useState<{ conversationId: string; error: string } | null>(null);
 
   const activeId = routeConversationId && routeConversationId.length > 0 ? routeConversationId : null;
+
+  // Ref para activeId: permite leitura dentro de callbacks Realtime sem depender de closure
+  const activeIdRef = useRef<string | null>(activeId);
+  useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
+
+  // Ref para conversations: leitura sem criar dependência em efeitos pontuais
+  const conversationsRef = useRef<InboxConversation[]>([]);
+  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
 
   // Limpa initialSendError ao trocar de conversa
   useEffect(() => {
@@ -62,7 +70,24 @@ export const Inbox: React.FC = () => {
       });
 
       if (error) throw error;
-      setConversations((data as InboxConversation[]) || []);
+
+      const convs = (data as InboxConversation[]) || [];
+      const currentActive = activeIdRef.current;
+
+      // Se a conversa ativa tem não lidas no banco, marca como lida em background
+      if (currentActive) {
+        const activeConv = convs.find(c => c.conversation_id === currentActive);
+        if (activeConv && activeConv.unread_count > 0) {
+          supabase.rpc('rpc_mark_conversation_read', { p_conversation_id: currentActive });
+        }
+      }
+
+      // Nunca exibe badge de não lido para a conversa atualmente aberta
+      setConversations(convs.map(c =>
+        currentActive && c.conversation_id === currentActive
+          ? { ...c, unread_count: 0 }
+          : c
+      ));
     } catch (err: any) {
       console.error('Error fetching inbox:', err);
     } finally {
@@ -75,6 +100,17 @@ export const Inbox: React.FC = () => {
   useEffect(() => { fetchInboxRef.current = fetchInbox; }, [fetchInbox]);
 
   useEffect(() => { fetchInbox(); }, [fetchInbox]);
+
+  // Marca como lida imediatamente (otimista + persiste) ao abrir uma conversa
+  useEffect(() => {
+    if (!activeId) return;
+    const conv = conversationsRef.current.find(c => c.conversation_id === activeId);
+    if (!conv || conv.unread_count === 0) return;
+    setConversations(prev => prev.map(c =>
+      c.conversation_id === activeId ? { ...c, unread_count: 0 } : c
+    ));
+    supabase.rpc('rpc_mark_conversation_read', { p_conversation_id: activeId });
+  }, [activeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Busca agentes da empresa para o filtro
   useEffect(() => {
@@ -96,7 +132,7 @@ export const Inbox: React.FC = () => {
   }, [currentCompany]);
 
   // Realtime: atualiza a lista silenciosamente quando chegam novos eventos
-  // fetchInboxRef garante que o canal não seja recriado a cada render
+  // fetchInboxRef e activeIdRef garantem que o canal não seja recriado a cada render
   useEffect(() => {
     if (!currentCompany) return;
 
@@ -105,7 +141,18 @@ export const Inbox: React.FC = () => {
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
-        () => { fetchInboxRef.current(true); }
+        (payload) => {
+          const msg = payload.new as any;
+          // Se a nova mensagem inbound é da conversa aberta, marca como lida imediatamente
+          if (
+            msg.conversation_id === activeIdRef.current &&
+            msg.sender_type === 'contact' &&
+            !msg.is_internal
+          ) {
+            supabase.rpc('rpc_mark_conversation_read', { p_conversation_id: msg.conversation_id });
+          }
+          fetchInboxRef.current(true);
+        }
       )
       .on(
         'postgres_changes',

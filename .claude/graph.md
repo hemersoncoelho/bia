@@ -26,6 +26,9 @@ components/
           NewConversationModal · Timeline
   Pipeline/: DealCard · DealDetailPanel · NewDealModal · PipelineSettingsDrawer · StageColumn
   Dashboard/: KpiCard · PeriodFilter
+  Tasks/: ActivityDetailDrawer · ActivityTaskCard · AgentBadgeMini · AgentMessageBubble
+          AgentOperationCard · AutopilotCard · CadenceList · CadenceStepBuilder · CadenceWizard
+          CompletedSection · MissionControlBento · NewTaskModal · OperationCountdownBar · StatsStrip
   admin/: AdminShell · AdminSidebar · AdminTopbar · NewCompanyModal
   Layout/: AppShell · Sidebar · SupportBanner · Topbar
   Integrations/: WhatsAppConnectModal
@@ -54,6 +57,7 @@ type Role · interface UserProfile · interface Company · interface UserContext
 type SessionState · interface EffectiveUser
 type DealStatus · interface Deal · interface PipelineStage · interface StageSummary
 type TaskStatus · interface Task · interface Note
+type AgentOperationType · type AgentOperationLabel · type AgentOperationStatus · interface AgentOperation
 type AiAgentProvider · type AttendanceMode · type AgentBindingType · type AgentToolType
 type ToolReadinessStatus · interface ToolDependency · interface ToolContext
 interface ProductCatalogItem · type ToolFieldType · interface ToolFieldDef
