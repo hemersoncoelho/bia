@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import {
-  Flame, Sparkles, Timer, Calendar,
+  Flame, Timer, Calendar,
   MessageSquare, ChevronDown, ChevronUp, User,
   Pencil, Plus,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import type { Task, TaskStatus, AiFollowupDecision } from '../../types';
+import type { Task, TaskStatus, AgentOperation } from '../../types';
 import { CompletedSection } from './CompletedSection';
+import { AgentBadgeMini } from './AgentBadgeMini';
+import { AutopilotCard } from './AutopilotCard';
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function formatRelative(iso?: string): string {
   if (!iso) return '';
   const diff = Date.now() - new Date(iso).getTime();
@@ -41,11 +43,13 @@ function formatFuture(iso?: string): string {
   if (h > 0) return `${h}h`;
   return 'Hoje';
 }
-function renderBold(text: string) {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((p, i) =>
-    p.startsWith('**') && p.endsWith('**')
-      ? <strong key={i} className="font-semibold text-primary">{p.slice(2, -2)}</strong>
-      : <span key={i}>{p}</span>
+
+function isAgentTask(task: Task): boolean {
+  return (
+    task.ai_generated === true ||
+    task.source_type === 'ai' ||
+    task.source_type === 'followup_trigger' ||
+    task.source_type === 'cadence'
   );
 }
 
@@ -119,7 +123,7 @@ const BentoCard: React.FC<BentoCardProps> = ({
   </div>
 );
 
-// ── AgoraItem — single-line compact ──────────────────────────────────────────
+// ── AgoraItem ─────────────────────────────────────────────────────────────────
 interface AgoraItemProps {
   task: Task;
   onStatusChange: (id: string, s: TaskStatus) => void;
@@ -145,7 +149,6 @@ const AgoraItem: React.FC<AgoraItemProps> = ({ task, onStatusChange, onOpenConve
         !isUrgent && !overdue && 'border-border',
       )}
     >
-      {/* Status button */}
       <button
         type="button"
         aria-label="Alterar status"
@@ -158,17 +161,16 @@ const AgoraItem: React.FC<AgoraItemProps> = ({ task, onStatusChange, onOpenConve
         {isInProgress && <span className={cn('h-1.5 w-1.5 rounded-full', isUrgent ? 'bg-rose-400' : 'bg-amber-400')} />}
       </button>
 
-      {/* Title */}
       <span className="min-w-0 flex-1 truncate text-xs font-medium text-primary">{task.title}</span>
 
-      {/* Overdue badge */}
+      {isAgentTask(task) && <AgentBadgeMini />}
+
       {overdue && (
         <span className="shrink-0 rounded border border-rose-500/30 bg-rose-500/10 px-1 py-px font-mono text-[9px] font-semibold uppercase text-rose-400">
           {formatRelative(task.due_at)}
         </span>
       )}
 
-      {/* Meta: contact · assignee */}
       {(task.contact_name ?? task.assigned_to_name) && (
         <span className="shrink-0 flex items-center gap-1 text-[10px] text-stone-500">
           <User size={8} />
@@ -176,7 +178,6 @@ const AgoraItem: React.FC<AgoraItemProps> = ({ task, onStatusChange, onOpenConve
         </span>
       )}
 
-      {/* Actions */}
       <div className="shrink-0 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
         <button
           type="button"
@@ -212,64 +213,9 @@ const AgoraItem: React.FC<AgoraItemProps> = ({ task, onStatusChange, onOpenConve
   );
 };
 
-
-// ── IASuggestion — compact ────────────────────────────────────────────────────
-interface IASuggestionProps {
-  decision: AiFollowupDecision;
-  agentName: string;
-  onAccept: (id: string) => void;
-  onDiscard: (id: string) => void;
-}
-const IASuggestion: React.FC<IASuggestionProps> = ({ decision, agentName, onAccept, onDiscard }) => {
-  const pct = decision.confidence !== undefined
-    ? Math.round((decision.confidence ?? 0) <= 1 ? (decision.confidence ?? 0) * 100 : (decision.confidence ?? 0))
-    : null;
-
-  return (
-    <div className="rounded-lg border border-violet-500/20 bg-violet-500/[0.03] px-2.5 py-2 transition-all duration-200 hover:border-violet-500/35">
-      {/* Header row */}
-      <div className="mb-1.5 flex items-center gap-1.5">
-        {/* Mini avatar */}
-        <div className="relative h-5 w-5 shrink-0">
-          <div className="spin-halo absolute inset-0 rounded-full opacity-35"
-            style={{ background: 'conic-gradient(from 0deg, rgba(167,139,250,0.8), rgba(34,211,238,0.4), rgba(167,139,250,0.8))' }} />
-          <div className="absolute inset-[2px] flex items-center justify-center rounded-full bg-surface">
-            <Sparkles size={8} className="text-violet-400" />
-          </div>
-        </div>
-        <span className="text-[11px] font-semibold text-violet-300">{agentName}</span>
-        {pct !== null && (
-          <span className="ml-auto font-mono text-[10px] font-semibold"
-            style={{ color: pct >= 80 ? '#34d399' : pct >= 65 ? '#fbbf24' : '#f87171' }}>
-            {pct}%
-          </span>
-        )}
-      </div>
-
-      {/* Text (2 lines max) */}
-      <p className="mb-2 line-clamp-2 text-[11px] leading-relaxed text-text-muted">
-        {decision.recommended_action ? renderBold(decision.recommended_action) : 'Ação recomendada pela IA.'}
-      </p>
-
-      {/* Actions */}
-      <div className="flex items-center gap-1.5">
-        <button type="button" onClick={() => onAccept(decision.id)}
-          className="rounded border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold text-violet-300 transition-colors hover:bg-violet-500/20 focus:outline-none focus-visible:ring-1 focus-visible:ring-violet-400/40">
-          Aceitar
-        </button>
-        <button type="button" onClick={() => onDiscard(decision.id)}
-          className="rounded px-2 py-0.5 text-[10px] font-medium text-stone-500 transition-colors hover:bg-surface-hover hover:text-primary focus:outline-none">
-          Descartar
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// ── ProgressItem — compact ────────────────────────────────────────────────────
+// ── ProgressItem ──────────────────────────────────────────────────────────────
 const ProgressItem: React.FC<{ task: Task; onEditTask: () => void; onClick: () => void }> = ({ task, onEditTask, onClick }) => {
   const pct = progressPct(task);
-  const isAi = task.ai_generated;
   return (
     <div
       role="button"
@@ -280,12 +226,11 @@ const ProgressItem: React.FC<{ task: Task; onEditTask: () => void; onClick: () =
     >
       <div className="mb-1.5 flex items-center gap-2">
         <p className="min-w-0 flex-1 truncate text-xs font-medium text-primary">{task.title}</p>
-        <div className="flex shrink-0 items-center gap-1.5 text-[10px] text-stone-500">
-          <span className={cn('rounded border px-1 font-mono uppercase tracking-wide text-[9px]',
-            isAi ? 'border-violet-500/25 text-violet-400' : 'border-stone-500/25 text-stone-500')}>
-            {isAi ? 'IA' : 'Manual'}
-          </span>
-          {task.assigned_to_name && <span>{task.assigned_to_name.split(' ')[0]}</span>}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {isAgentTask(task) ? <AgentBadgeMini /> : (
+            <span className="rounded border border-stone-500/25 px-1 font-mono text-[9px] uppercase tracking-wide text-stone-500">Manual</span>
+          )}
+          {task.assigned_to_name && <span className="text-[10px] text-stone-500">{task.assigned_to_name.split(' ')[0]}</span>}
         </div>
         <div className="shrink-0 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           <button
@@ -315,7 +260,7 @@ const ProgressItem: React.FC<{ task: Task; onEditTask: () => void; onClick: () =
   );
 };
 
-// ── NextItem — compact single line ────────────────────────────────────────────
+// ── NextItem ──────────────────────────────────────────────────────────────────
 const NextItem: React.FC<{ task: Task; onEditTask: () => void; onClick: () => void }> = ({ task, onEditTask, onClick }) => (
   <div
     role="button"
@@ -326,6 +271,10 @@ const NextItem: React.FC<{ task: Task; onEditTask: () => void; onClick: () => vo
   >
     <div className="h-3.5 w-3.5 shrink-0 rounded-full border-2 border-stone-500" />
     <p className="min-w-0 flex-1 truncate text-xs text-primary">{task.title}</p>
+
+    {/* Badge IA apenas para tarefas com origem de agente */}
+    {isAgentTask(task) && <AgentBadgeMini />}
+
     {(task.contact_name ?? task.assigned_to_name) && (
       <span className="shrink-0 text-[10px] text-stone-500">
         {[task.contact_name?.split(' ')[0], task.assigned_to_name?.split(' ')[0]].filter(Boolean).join(' · ')}
@@ -355,14 +304,7 @@ const NextItem: React.FC<{ task: Task; onEditTask: () => void; onClick: () => vo
   </div>
 );
 
-// ── Typing dots ───────────────────────────────────────────────────────────────
-const TypingDots: React.FC = () => (
-  <div className="flex items-center gap-0.5" aria-label="IA processando">
-    {[0,1,2].map(i => <span key={i} className="typing-dot h-1 w-1 rounded-full bg-violet-400" />)}
-  </div>
-);
-
-// ── Empty ─────────────────────────────────────────────────────────────────────
+// ── EmptySlot ─────────────────────────────────────────────────────────────────
 const EmptySlot: React.FC<{ label: string; onAddTask?: () => void }> = ({ label, onAddTask }) => (
   <div className="flex flex-col items-center gap-2 py-3 text-center">
     <p className="text-[11px] text-stone-500">{label}</p>
@@ -372,106 +314,142 @@ const EmptySlot: React.FC<{ label: string; onAddTask?: () => void }> = ({ label,
         onClick={onAddTask}
         className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-[11px] font-semibold text-text-muted transition-colors hover:border-primary/25 hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
       >
-        <Plus size={11} />
-        Adicionar tarefa
+        <Plus size={11} />Adicionar tarefa
       </button>
     )}
   </div>
 );
 
-// ── Main export ───────────────────────────────────────────────────────────────
+// ── Props ─────────────────────────────────────────────────────────────────────
 export interface BentoProps {
   tasks: Task[];
-  aiDecisions: AiFollowupDecision[];
-  agentName?: string;
+  agentOperations: AgentOperation[];
+  autopilotEnabled: boolean;
+  onToggleAutopilot: () => void;
+  onUpdateOperationMessage: (id: string, message: string) => Promise<{ success: boolean; error?: string }>;
+  onRescheduleOperation: (id: string, sendAt: string) => Promise<{ success: boolean; error?: string }>;
+  onSnoozeOperation: (id: string) => Promise<{ success: boolean; error?: string }>;
+  onCancelOperation: (id: string) => void;
   onStatusChange: (id: string, s: TaskStatus) => void;
   onOpenConversation: (id: string) => void;
   onTaskClick: (t: Task) => void;
   onEditTask: (t: Task) => void;
-  onAcceptDecision: (id: string) => void;
-  onDiscardDecision: (id: string) => void;
   onAddTask?: () => void;
 }
 
+// ── Main export ───────────────────────────────────────────────────────────────
 export const MissionControlBento: React.FC<BentoProps> = ({
-  tasks, aiDecisions, agentName, onStatusChange, onOpenConversation, onTaskClick, onEditTask, onAcceptDecision, onDiscardDecision, onAddTask,
+  tasks,
+  agentOperations,
+  autopilotEnabled,
+  onToggleAutopilot,
+  onUpdateOperationMessage,
+  onRescheduleOperation,
+  onSnoozeOperation,
+  onCancelOperation,
+  onStatusChange,
+  onOpenConversation,
+  onTaskClick,
+  onEditTask,
+  onAddTask,
 }) => {
-  const displayAgentName = agentName || 'IA';
   const nowTasks = tasks.filter(t =>
     t.status !== 'done' && t.status !== 'cancelled' &&
-    (t.priority === 'urgent' || isOverdue(t.due_at, t.status))
+    (t.priority === 'urgent' || isOverdue(t.due_at, t.status)),
   );
   const inProgressTasks = tasks.filter(t => t.status === 'in_progress');
   const nextTasks = tasks.filter(t =>
-    t.status === 'open' && !isOverdue(t.due_at, t.status) && t.priority !== 'urgent'
+    t.status === 'open' && !isOverdue(t.due_at, t.status) && t.priority !== 'urgent',
   );
 
   return (
     <div className="space-y-2.5">
       <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
-      {/* Card 1 — Agora */}
-      <BentoCard
-        title="Agora · precisa de você"
-        icon={<Flame size={12} className="text-rose-400" />}
-        count={nowTasks.length}
-        delay={0}
-        accentClass="bg-rose-500/10"
-        borderClass="border-rose-500/20"
-        glowStyle={{ background: 'radial-gradient(ellipse at top left, rgba(244,63,94,0.05), transparent 55%)' }}
-      >
-        {nowTasks.length === 0 ? <EmptySlot label="Nenhuma atividade urgente agora" onAddTask={onAddTask} /> : (
-          <ExpandableList items={nowTasks} initial={3} accentColor="#f43f5e"
-            renderItem={t => <AgoraItem task={t} onStatusChange={onStatusChange} onOpenConversation={onOpenConversation} onEditTask={() => onEditTask(t)} onClick={() => onTaskClick(t)} />} />
-        )}
-      </BentoCard>
 
-      {/* Card 2 — IA Agent */}
-      <BentoCard
-        title={`IA · ${displayAgentName} sugere`}
-        icon={<Sparkles size={12} className="text-violet-400" />}
-        count={aiDecisions.length}
-        delay={60}
-        accentClass="bg-violet-500/10"
-        borderClass="border-violet-500/20"
-        glowStyle={{ background: 'radial-gradient(ellipse at top right, rgba(167,139,250,0.05), transparent 55%)' }}
-      >
-        <div className="mb-1.5 flex items-center gap-1.5">
-          <TypingDots />
-          <span className="text-[10px] text-stone-500">analisando conversas…</span>
-        </div>
-        {aiDecisions.length === 0 ? <EmptySlot label="Nenhuma sugestão pendente" /> : (
-          <ExpandableList items={aiDecisions} initial={2} accentColor="#a78bfa"
-            renderItem={d => <IASuggestion decision={d} agentName={displayAgentName} onAccept={onAcceptDecision} onDiscard={onDiscardDecision} />} />
-        )}
-      </BentoCard>
+        {/* Card 1 — Agora */}
+        <BentoCard
+          title="Agora · precisa de você"
+          icon={<Flame size={12} className="text-rose-400" />}
+          count={nowTasks.length}
+          delay={0}
+          accentClass="bg-rose-500/10"
+          borderClass="border-rose-500/20"
+          glowStyle={{ background: 'radial-gradient(ellipse at top left, rgba(244,63,94,0.05), transparent 55%)' }}
+        >
+          {nowTasks.length === 0
+            ? <EmptySlot label="Nenhuma atividade urgente agora" onAddTask={onAddTask} />
+            : (
+              <ExpandableList items={nowTasks} initial={3} accentColor="#f43f5e"
+                renderItem={t => (
+                  <AgoraItem
+                    task={t}
+                    onStatusChange={onStatusChange}
+                    onOpenConversation={onOpenConversation}
+                    onEditTask={() => onEditTask(t)}
+                    onClick={() => onTaskClick(t)}
+                  />
+                )}
+              />
+            )}
+        </BentoCard>
 
-      {/* Card 3 — Em andamento */}
-      <BentoCard
-        title="Em andamento"
-        icon={<Timer size={12} className="text-amber-400" />}
-        count={inProgressTasks.length}
-        delay={120}
-        accentClass="bg-amber-500/10"
-      >
-        {inProgressTasks.length === 0 ? <EmptySlot label="Nenhuma tarefa em andamento" /> : (
-          <ExpandableList items={inProgressTasks} initial={2} accentColor="#fbbf24"
-            renderItem={t => <ProgressItem task={t} onEditTask={() => onEditTask(t)} onClick={() => onTaskClick(t)} />} />
-        )}
-      </BentoCard>
+        {/* Card 2 — Autopilot */}
+        <AutopilotCard
+          operations={agentOperations}
+          autopilotEnabled={autopilotEnabled}
+          onToggleAutopilot={onToggleAutopilot}
+          onUpdateMessage={onUpdateOperationMessage}
+          onReschedule={onRescheduleOperation}
+          onSnooze={onSnoozeOperation}
+          onCancel={onCancelOperation}
+          delay={60}
+        />
 
-      {/* Card 4 — Próximas */}
-      <BentoCard
-        title="Próximas"
-        icon={<Calendar size={12} className="text-stone-400" />}
-        count={nextTasks.length}
-        delay={180}
-        accentClass="bg-stone-500/10"
-      >
-        {nextTasks.length === 0 ? <EmptySlot label="Nenhuma tarefa agendada" onAddTask={onAddTask} /> : (
-          <ExpandableList items={nextTasks} initial={2} accentColor="#22d3ee"
-            renderItem={t => <NextItem task={t} onEditTask={() => onEditTask(t)} onClick={() => onTaskClick(t)} />} />
-        )}
-      </BentoCard>
+        {/* Card 3 — Em andamento */}
+        <BentoCard
+          title="Em andamento"
+          icon={<Timer size={12} className="text-amber-400" />}
+          count={inProgressTasks.length}
+          delay={120}
+          accentClass="bg-amber-500/10"
+        >
+          {inProgressTasks.length === 0
+            ? <EmptySlot label="Nenhuma tarefa em andamento" />
+            : (
+              <ExpandableList items={inProgressTasks} initial={2} accentColor="#fbbf24"
+                renderItem={t => (
+                  <ProgressItem
+                    task={t}
+                    onEditTask={() => onEditTask(t)}
+                    onClick={() => onTaskClick(t)}
+                  />
+                )}
+              />
+            )}
+        </BentoCard>
+
+        {/* Card 4 — Próximas */}
+        <BentoCard
+          title="Próximas"
+          icon={<Calendar size={12} className="text-stone-400" />}
+          count={nextTasks.length}
+          delay={180}
+          accentClass="bg-stone-500/10"
+        >
+          {nextTasks.length === 0
+            ? <EmptySlot label="Nenhuma tarefa agendada" onAddTask={onAddTask} />
+            : (
+              <ExpandableList items={nextTasks} initial={2} accentColor="#22d3ee"
+                renderItem={t => (
+                  <NextItem
+                    task={t}
+                    onEditTask={() => onEditTask(t)}
+                    onClick={() => onTaskClick(t)}
+                  />
+                )}
+              />
+            )}
+        </BentoCard>
       </div>
 
       <CompletedSection tasks={tasks} onTaskClick={onTaskClick} />

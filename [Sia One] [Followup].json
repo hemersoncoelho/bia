@@ -1,0 +1,565 @@
+{
+  "name": "[Sia One] [Followup]",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        1312,
+        2000
+      ],
+      "id": "6178a614-cc89-41fb-8c8d-4e0231842832",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "const trigger = $('When Executed by Another Workflow').item.json;\nconst company_id = trigger.company_id || null;\nconst contact_id = trigger.contact_id || null;\nconst conversation_id = trigger.conversation_id || null;\nconst buffered_user_message = trigger.buffered_user_message || '';\nconst agent_response = trigger.agent_response || '';\nconst allItems = $input.all();\nlet messages = [];\ntry {\n  if (allItems.length === 1 && Array.isArray(allItems[0].json)) {\n    messages = allItems[0].json;\n  } else {\n    messages = allItems.map(i => i.json).filter(m => m && m.body);\n  }\n} catch(e) { messages = []; }\nmessages.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));\nconst recent = messages.slice(-15);\nconst roleLabel = (msg) => {\n  const r = (msg.sender_type || '').toLowerCase();\n  if (r === 'bot') return 'IA';\n  if (r === 'agent') return 'Agente Humano';\n  if (r === 'system') return 'Sistema';\n  return 'Contato';\n};\nconst lines = recent.map(msg => {\n  const t = msg.created_at\n    ? new Date(msg.created_at).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})\n    : '??:??';\n  return '[' + t + '] ' + roleLabel(msg) + ': ' + (msg.body || '').substring(0, 400);\n});\nif (buffered_user_message) lines.push('[AGORA] Contato: ' + buffered_user_message);\nif (agent_response) lines.push('[AGORA] IA: ' + agent_response);\nconst fullTranscript = lines.join('\\n');\nconst schemaLines = [\n  '{',\n  '  \"estagio\": \"prospecção|qualificação|proposta|negociação|fechamento|suporte\",',\n  '  \"resumo\": \"2-3 frases sobre o estado atual\",',\n  '  \"ultima_acao_ia\": \"o que a IA fez por último\",',\n  '  \"ultima_acao_humano\": null,',\n  '  \"resposta_pendente_do_contato\": true,',\n  '  \"orcamento_ou_proposta_enviada\": false,',\n  '  \"contato_pediu_para_retornar\": false,',\n  '  \"decisor_terceiro_mencionado\": false,',\n  '  \"nivel_engajamento\": \"alto|médio|baixo|desengajado\",',\n  '  \"objecao_detectada\": null,',\n  '  \"evento_principal\": \"awaiting_contact_reply|qualification_question_sent|appointment_question_sent|quote_sent_waiting_reply|third_party_decision|asked_to_return_later|price_objection|no_followup_needed\"',\n  '}'\n];\nconst system_prompt = 'Você é um analista de conversas comerciais. Sintetize o histórico e identifique o estado atual da negociação.\\n\\nResponda APENAS com JSON neste formato:\\n' + schemaLines.join('\\n');\nconst llm_payload = {\n  model: 'gpt-4.1-mini',\n  temperature: 0,\n  response_format: { type: 'json_object' },\n  messages: [\n    { role: 'system', content: system_prompt },\n    { role: 'user', content: 'Histórico (' + recent.length + ' msgs):\\n\\n' + (fullTranscript || '(sem histórico)') }\n  ]\n};\nreturn [{\n  json: {\n    company_id, contact_id, conversation_id,\n    buffered_user_message, agent_response,\n    llm_payload, messages_analyzed: recent.length\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1776,
+        2000
+      ],
+      "id": "8b139de4-2991-4f15-b314-2ddfbc8a75e8",
+      "name": "monta_sintese_payload1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.llm_payload) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2016,
+        2000
+      ],
+      "id": "8a28dec8-b86c-4295-b2e3-45f3bb44dd6c",
+      "name": "sintetiza_conversa_llm1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "1dOXhDaqEqdVNGVp",
+          "name": "OpenAI - Sales"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const trigger = $('When Executed by Another Workflow').item.json;\nconst company_id      = trigger.company_id      || null;\nconst contact_id      = trigger.contact_id      || null;\nconst conversation_id = trigger.conversation_id || null;\nconst buffered_user_message = trigger.buffered_user_message || '';\nconst agent_response        = trigger.agent_response        || '';\nconst current_time = new Date().toISOString();\nconst can_create_trigger = !!company_id;\n\nconst system_prompt = 'Você é um agente operacional do Sia One responsável por decidir se a conversa deve ser monitorada para follow-up futuro.\\n\\n'\n  + 'Você NÃO envia WhatsApp. Você NÃO cria tarefa diretamente. Você NÃO executa cadência.\\n'\n  + 'Você recebe a síntese completa da conversa e decide se merece um trigger de follow-up.\\n\\n'\n  + 'Tipos de trigger disponíveis (trigger_type):\\n'\n  + '- no_response_after_ai_question\\n'\n  + '- no_response_after_human_message\\n'\n  + '- third_party_decision_followup\\n'\n  + '- asked_to_return_later\\n'\n  + '- qualification_abandoned\\n'\n  + '- post_quote_followup\\n'\n  + '- no_followup_needed\\n\\n'\n  + 'Eventos detectados possíveis (detected_event):\\n'\n  + '- awaiting_contact_reply\\n'\n  + '- qualification_question_sent\\n'\n  + '- appointment_question_sent\\n'\n  + '- quote_sent_waiting_reply\\n'\n  + '- third_party_decision\\n'\n  + '- asked_to_return_later\\n'\n  + '- price_objection\\n'\n  + '- no_followup_needed\\n\\n'\n  + 'Regras:\\n'\n  + '- Se a conversa não espera resposta: should_create_trigger = false\\n'\n  + '- Se confidence < 0.65: should_create_trigger = false\\n'\n  + '- Use o evento_principal da síntese para guiar o detected_event\\n'\n  + '- Responda SEMPRE em JSON válido com todos os campos abaixo';\n\nlet sintese = {};\ntry {\n  const rawSintese = $('sintetiza_conversa_llm1').first().json;\n  const sintesContent = rawSintese && rawSintese.choices && rawSintese.choices[0] && rawSintese.choices[0].message\n    ? rawSintese.choices[0].message.content\n    : '{}';\n  sintese = JSON.parse(sintesContent);\n} catch(e) { sintese = {}; }\n\nconst sintese_str = sintese.resumo\n  ? 'Estágio: ' + (sintese.estagio || '?') + '\\n'\n    + 'Resumo: ' + sintese.resumo + '\\n'\n    + 'Última ação IA: ' + (sintese.ultima_acao_ia || '?') + '\\n'\n    + 'Última ação humano: ' + (sintese.ultima_acao_humano || 'nenhuma') + '\\n'\n    + 'Resposta pendente: ' + (sintese.resposta_pendente_do_contato ? 'SIM' : 'NÃO') + '\\n'\n    + 'Orçamento enviado: ' + (sintese.orcamento_ou_proposta_enviada ? 'SIM' : 'NÃO') + '\\n'\n    + 'Pediu para retornar: ' + (sintese.contato_pediu_para_retornar ? 'SIM' : 'NÃO') + '\\n'\n    + 'Decisor terceiro: ' + (sintese.decisor_terceiro_mencionado ? 'SIM' : 'NÃO') + '\\n'\n    + 'Engajamento: ' + (sintese.nivel_engajamento || '?') + '\\n'\n    + 'Objeção: ' + (sintese.objecao_detectada || 'nenhuma') + '\\n'\n    + 'Evento principal: ' + (sintese.evento_principal || '?')\n  : '(síntese não disponível — usando apenas última troca)';\n\nconst user_content = 'Momento atual: ' + current_time + '\\n\\n'\n  + '=== SÍNTESE DA CONVERSA ===\\n'\n  + sintese_str + '\\n\\n'\n  + '=== ÚLTIMA TROCA ===\\n'\n  + 'Contato: ' + buffered_user_message + '\\n'\n  + 'IA: ' + agent_response + '\\n\\n'\n  + 'Responda com JSON exatamente neste formato:\\n'\n  + '{\\n'\n  + '  \"should_create_trigger\": true,\\n'\n  + '  \"trigger_type\": \"no_response_after_ai_question\",\\n'\n  + '  \"detected_event\": \"awaiting_contact_reply\",\\n'\n  + '  \"expected_reply_window_minutes\": 60,\\n'\n  + '  \"reason\": \"string\",\\n'\n  + '  \"recommended_action\": \"string\",\\n'\n  + '  \"recommended_followup_message\": \"string\",\\n'\n  + '  \"confidence\": 0.85,\\n'\n  + '  \"metadata\": {}\\n'\n  + '}';\n\nconst llm_payload = {\n  model: 'gpt-4.1-mini',\n  temperature: 0,\n  response_format: { type: 'json_object' },\n  messages: [\n    { role: 'system', content: system_prompt },\n    { role: 'user',   content: user_content  }\n  ]\n};\n\nreturn [{\n  json: {\n    company_id,\n    contact_id,\n    conversation_id,\n    buffered_user_message,\n    agent_response,\n    current_time,\n    can_create_trigger,\n    sintese,\n    llm_payload\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2256,
+        2000
+      ],
+      "id": "2f2e1109-b2bc-463f-8632-369ba87bf513",
+      "name": "prepara_followup_decision1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b2c3d4e5-f6a7-8901-bcde-f01234567890",
+              "leftValue": "={{ $json.can_create_trigger }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2464,
+        2000
+      ],
+      "id": "ffb7b72f-970c-4e4a-afef-4d6c2605bfb1",
+      "name": "check_can_create_trigger1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.llm_payload) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2672,
+        1984
+      ],
+      "id": "32248efd-4daa-4649-a12e-8aba33cbbb79",
+      "name": "followup_trigger_llm1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "1dOXhDaqEqdVNGVp",
+          "name": "OpenAI - Sales"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json;\nconst prep = $('prepara_followup_decision1').first().json;\n\nlet decision = {};\ntry {\n  const content = raw.choices && raw.choices[0] && raw.choices[0].message && raw.choices[0].message.content ? raw.choices[0].message.content : '{}';\n  decision = JSON.parse(content);\n} catch(e) {\n  decision = { should_create_trigger: false, confidence: 0, reason: 'parse_error: ' + e.message };\n}\n\nconst confidence = parseFloat(decision.confidence || 0);\nconst shouldCreate = decision.should_create_trigger === true && confidence >= 0.65;\nconst windowMinutes = parseInt(decision.expected_reply_window_minutes || 1440);\nconst expectedReplyUntil = new Date(Date.now() + windowMinutes * 60 * 1000).toISOString();\n\nreturn [{\n  json: {\n    should_create_trigger: shouldCreate,\n    trigger_type: decision.trigger_type || 'no_response_after_ai_question',\n    detected_event: decision.detected_event || 'awaiting_contact_reply',\n    expected_reply_window_minutes: windowMinutes,\n    expected_reply_until: expectedReplyUntil,\n    reason: decision.reason || '',\n    recommended_action: decision.recommended_action || '',\n    recommended_followup_message: decision.recommended_followup_message || '',\n    confidence: confidence,\n    metadata: decision.metadata || {},\n    company_id: prep.company_id,\n    contact_id: prep.contact_id,\n    conversation_id: prep.conversation_id\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        1984
+      ],
+      "id": "63d0b574-744a-4788-8ded-c9a1fd66e394",
+      "name": "parse_followup_decision1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f6a7b8c9-d0e1-2345-fabc-345678901234",
+              "leftValue": "={{ $json.should_create_trigger }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3088,
+        1984
+      ],
+      "id": "48233393-fbd5-4788-82ee-d3853dd80285",
+      "name": "check_should_create_trigger1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_create_conversation_followup_trigger",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  p_company_id:         $json.company_id,\n  p_contact_id:         $json.contact_id,\n  p_conversation_id:    $json.conversation_id,\n  p_trigger_type:       $json.trigger_type,\n  p_expected_reply_until: $json.expected_reply_until,\n  p_created_from_message_id: null,\n  p_detected_event:     $json.detected_event,\n  p_reason:             $json.reason,\n  p_recommended_action: $json.recommended_action,\n  p_recommended_message: $json.recommended_followup_message,\n  p_ai_confidence:      $json.confidence,\n  p_metadata:           $json.metadata || {}\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        3328,
+        1920
+      ],
+      "id": "71579ab9-5240-4ed6-ac40-86a2d4e5d721",
+      "name": "create_followup_trigger1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2848,
+        2208
+      ],
+      "id": "55692164-7db5-4c89-994e-c6c6d6c0dc56",
+      "name": "followup_noop1"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "messages",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "company_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.company_id }}"
+            },
+            {
+              "keyName": "contact_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.contact_id }}"
+            },
+            {
+              "keyName": "conversation_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.conversation_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1552,
+        2000
+      ],
+      "id": "b03eede9-b980-4199-8eea-f226ccda2895",
+      "name": "busca_historico_conversa1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "qqDi9glFmEF0uGwr",
+          "name": "Sia One"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/companies?id=eq.' + $('parse_followup_decision1').first().json.company_id + '&select=autopilot_enabled&limit=1' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [3568, 1920],
+      "id": "aa11bb22-cc33-4444-5555-666677778880",
+      "name": "check_autopilot_enabled",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "aa11bb22-cc33-4444-5555-666677778891",
+              "leftValue": "={{ Array.isArray($json) && $json[0] && $json[0].autopilot_enabled === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [3808, 1920],
+      "id": "aa11bb22-cc33-4444-5555-666677778892",
+      "name": "route_autopilot"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [4048, 1760],
+      "id": "aa11bb22-cc33-4444-5555-666677778893",
+      "name": "noop_autopilot_handles"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepara o payload da agent_operation usando os dados da decisão de followup.\n// Extrai nome do contato a partir das mensagens já buscadas no histórico.\nvar decision = $('parse_followup_decision1').first().json;\n\nvar contact_name = '';\ntry {\n  var allMessages = $('busca_historico_conversa1').all().map(function(i) { return i.json; });\n  var contactMsg = allMessages.find(function(m) { return m.sender_type === 'contact' && m.sender_name; });\n  contact_name = (contactMsg && contactMsg.sender_name ? contactMsg.sender_name : '').trim();\n} catch(e) { contact_name = ''; }\n\nvar words = contact_name.split(/\\s+/).filter(Boolean);\nvar contact_initials = words.length >= 2\n  ? (words[0][0] + words[words.length - 1][0]).toUpperCase()\n  : contact_name.slice(0, 2).toUpperCase() || 'C';\n\n// Mapeia trigger_type → operation_type e label visual\nvar typeMap = {\n  'no_response_after_ai_question':  'follow_up',\n  'no_response_after_human_message': 'follow_up',\n  'third_party_decision_followup':  'escalate',\n  'asked_to_return_later':          'confirm',\n  'qualification_abandoned':        'rescue',\n  'post_quote_followup':            'confirm'\n};\nvar labelMap = {\n  'follow_up': 'FOLLOW-UP',\n  'escalate':  'ESCALAR',\n  'confirm':   'CONFIRMAR',\n  'rescue':    'RESGATE'\n};\n\nvar operation_type  = typeMap[decision.trigger_type]  || 'follow_up';\nvar operation_label = labelMap[operation_type]        || 'FOLLOW-UP';\n\n// Contexto resumido (máx 200 chars) para exibição no card\nvar context = (decision.reason || decision.detected_event || 'Follow-up automático').slice(0, 200);\n\n// Chave de idempotência: conversation_id + tipo + data (evita duplicatas no mesmo dia)\nvar isoDate = new Date().toISOString().split('T')[0];\nvar idempotency_key = decision.conversation_id + ':' + operation_type + ':' + isoDate;\n\nreturn [{\n  json: {\n    company_id:       decision.company_id,\n    contact_id:       decision.contact_id,\n    conversation_id:  decision.conversation_id,\n    contact_name:     contact_name,\n    contact_initials: contact_initials,\n    operation_type:   operation_type,\n    operation_label:  operation_label,\n    message:          decision.recommended_followup_message || '',\n    context:          context,\n    reason:           decision.reason || null,\n    send_at:          decision.expected_reply_until,\n    source:           'agent',\n    channel:          'whatsapp',\n    idempotency_key:  idempotency_key\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4048,
+        2080
+      ],
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "prepara_agent_operation_payload"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_n8n_upsert_agent_operation",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  p_company_id:       $json.company_id,\n  p_contact_id:       $json.contact_id,\n  p_conversation_id:  $json.conversation_id,\n  p_contact_name:     $json.contact_name,\n  p_contact_initials: $json.contact_initials,\n  p_operation_type:   $json.operation_type,\n  p_operation_label:  $json.operation_label,\n  p_message:          $json.message,\n  p_context:          $json.context,\n  p_reason:           $json.reason || null,\n  p_send_at:          $json.send_at,\n  p_source:           $json.source,\n  p_channel:          $json.channel,\n  p_idempotency_key:  $json.idempotency_key\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [4288, 2080],
+      "id": "bb22cc33-dd44-5566-7788-99aabbccdd00",
+      "name": "upsert_agent_operation_rpc",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "company_id": "b9f12661-cdce-48f7-abd0-1dcc341cd878",
+          "contact_id": "c08554ac-b563-41d3-a8c9-b0ccb0bac964",
+          "conversation_id": "9646ee83-570d-4f33-bd3b-c9014d9dec84",
+          "buffered_user_message": "Ainda tenho duvidas",
+          "agent_response": "Posso explicar como funciona o suporte e os ajustes no Training Peaks. Quer que eu mostre rapidinho?"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "busca_historico_conversa1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "monta_sintese_payload1": {
+      "main": [
+        [
+          {
+            "node": "sintetiza_conversa_llm1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "sintetiza_conversa_llm1": {
+      "main": [
+        [
+          {
+            "node": "prepara_followup_decision1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "prepara_followup_decision1": {
+      "main": [
+        [
+          {
+            "node": "check_can_create_trigger1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_can_create_trigger1": {
+      "main": [
+        [
+          {
+            "node": "followup_trigger_llm1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "followup_noop1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "followup_trigger_llm1": {
+      "main": [
+        [
+          {
+            "node": "parse_followup_decision1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse_followup_decision1": {
+      "main": [
+        [
+          {
+            "node": "check_should_create_trigger1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_should_create_trigger1": {
+      "main": [
+        [
+          {
+            "node": "create_followup_trigger1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "followup_noop1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "busca_historico_conversa1": {
+      "main": [
+        [
+          {
+            "node": "monta_sintese_payload1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "create_followup_trigger1": {
+      "main": [
+        [
+          {
+            "node": "check_autopilot_enabled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_autopilot_enabled": {
+      "main": [
+        [
+          {
+            "node": "route_autopilot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "route_autopilot": {
+      "main": [
+        [
+          {
+            "node": "noop_autopilot_handles",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "prepara_agent_operation_payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "prepara_agent_operation_payload": {
+      "main": [
+        [
+          {
+            "node": "upsert_agent_operation_rpc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "b2c3d4e5-f6a7-8901-abcd-ef1234567892",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "7e44dba8003e8ae6a7e9a2d983d63ce1a03b6fc6d0baad5c615d2e5c3f6e4030"
+  },
+  "id": "xR35lphGVuJs4hhW",
+  "tags": []
+}

@@ -1,14 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Repeat2 } from 'lucide-react';
+import { Zap } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export interface StatsStripData {
   completedToday: number;
   avgMinutes: number;
   overdue: number;
-  aiSuggested: number;
-  convertedAfterFollowup: number;
-  convertedAfterFollowupDelta: number;
+  operationsInQueue: number;
+  operationsExecutedToday: number;
 }
 
 function useCountUp(target: number, duration = 800): number {
@@ -54,14 +53,14 @@ const KpiCell: React.FC<KpiCellProps> = ({
     <div
       className={cn(
         'bento-card-animate relative flex min-w-[100px] flex-1 flex-col gap-0.5 px-4 py-2.5',
-        highlight && 'rounded-lg border border-[rgba(34,211,238,0.2)] bg-[rgba(34,211,238,0.04)]',
+        highlight && 'rounded-lg border border-[rgba(167,139,250,0.2)] bg-[rgba(167,139,250,0.04)]',
       )}
       style={{ animationDelay: `${delay}ms` }}
     >
       {highlight && (
         <div
           className="pointer-events-none absolute right-0 top-0 h-10 w-10 opacity-30"
-          style={{ background: 'radial-gradient(circle at top right, rgba(34,211,238,0.4), transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle at top right, rgba(167,139,250,0.4), transparent 70%)' }}
         />
       )}
       <div className="flex items-center gap-1">
@@ -94,23 +93,44 @@ interface Props { data: StatsStripData }
 
 export const StatsStrip: React.FC<Props> = ({ data }) => (
   <div className="flex items-stretch overflow-hidden rounded-xl border border-border bg-surface no-scrollbar">
-    <KpiCell label="Conclusão hoje" value={data.completedToday} suffix="%" delta={8} delay={0} />
-    <div className="w-px self-stretch bg-border" />
-    <KpiCell label="Tempo médio" value={data.avgMinutes} suffix=" min" delta={-3} valueColor="#fbbf24" delay={50} />
-    <div className="w-px self-stretch bg-border" />
-    <KpiCell label="Em atraso" value={data.overdue} valueColor={data.overdue > 0 ? '#f87171' : undefined} delay={100} />
-    <div className="w-px self-stretch bg-border" />
-    <KpiCell label="IA sugeriu" value={data.aiSuggested} valueColor="#a78bfa" delay={150} />
+    <KpiCell
+      label="Conclusão hoje"
+      value={data.completedToday}
+      suffix="%"
+      delta={8}
+      delay={0}
+    />
     <div className="w-px self-stretch bg-border" />
     <KpiCell
-      label="Convertido após follow"
-      value={data.convertedAfterFollowup}
-      suffix="%"
-      delta={data.convertedAfterFollowupDelta}
+      label="Tempo médio"
+      value={data.avgMinutes}
+      suffix=" min"
+      delta={-3}
+      valueColor="#fbbf24"
+      delay={50}
+    />
+    <div className="w-px self-stretch bg-border" />
+    <KpiCell
+      label="Em atraso"
+      value={data.overdue}
+      valueColor={data.overdue > 0 ? '#f87171' : undefined}
+      delay={100}
+    />
+    <div className="w-px self-stretch bg-border" />
+    <KpiCell
+      label="Operações em fila"
+      value={data.operationsInQueue}
+      valueColor="#a78bfa"
+      delay={150}
+    />
+    <div className="w-px self-stretch bg-border" />
+    <KpiCell
+      label="Executadas hoje"
+      value={data.operationsExecutedToday}
       highlight
-      labelColor="#22d3ee"
-      valueColor="#22d3ee"
-      icon={<Repeat2 size={9} style={{ color: '#22d3ee' }} className="shrink-0" />}
+      labelColor="#a78bfa"
+      valueColor="#a78bfa"
+      icon={<Zap size={9} style={{ color: '#a78bfa' }} className="shrink-0" />}
       delay={200}
     />
   </div>

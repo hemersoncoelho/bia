@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { cn } from '../lib/utils';
 import { useTenant } from '../contexts/TenantContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useAgentOperations } from '../hooks/useAgentOperations';
 import { ActivityDetailDrawer } from '../components/Tasks/ActivityDetailDrawer';
 import { NewTaskModal } from '../components/Tasks/NewTaskModal';
 import { CadenceList } from '../components/Tasks/CadenceList';
@@ -12,7 +13,7 @@ import { CadenceWizard } from '../components/Tasks/CadenceWizard';
 import { StatsStrip } from '../components/Tasks/StatsStrip';
 import type { StatsStripData } from '../components/Tasks/StatsStrip';
 import { MissionControlBento } from '../components/Tasks/MissionControlBento';
-import type { Task, TaskStatus, TaskPriority, TaskSourceType, AiFollowupDecision, ConversationFollowupTrigger } from '../types';
+import type { Task, TaskStatus, TaskPriority, TaskSourceType } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type MainTab = 'atividades' | 'cadencias';
@@ -40,22 +41,21 @@ function firstRelation<T>(v: SupabaseRelation<T>): T | null {
   return Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
 }
 function normalizePriority(v: unknown): TaskPriority {
-  const valid: TaskPriority[] = ['low','normal','high','urgent'];
+  const valid: TaskPriority[] = ['low', 'normal', 'high', 'urgent'];
   return (typeof v === 'string' && (valid as string[]).includes(v)) ? (v as TaskPriority) : 'normal';
 }
 function normalizeSource(v: unknown): TaskSourceType {
-  const valid: TaskSourceType[] = ['manual','ai','followup_trigger','cadence','appointment','inbox','system'];
+  const valid: TaskSourceType[] = ['manual', 'ai', 'followup_trigger', 'cadence', 'appointment', 'inbox', 'system'];
   return (typeof v === 'string' && (valid as string[]).includes(v)) ? (v as TaskSourceType) : 'manual';
 }
 function isOverdue(due?: string, status?: TaskStatus) {
   if (!due || status === 'done' || status === 'cancelled') return false;
-  const d = new Date(due); return !Number.isNaN(d.getTime()) && d.getTime() < Date.now();
-}
-function isFollowupTask(task: Task) {
-  return task.source_type === 'followup_trigger' || (isRecord(task.metadata) && task.metadata.source === 'expired_followup_trigger');
+  const d = new Date(due);
+  return !Number.isNaN(d.getTime()) && d.getTime() < Date.now();
 }
 function mapTask(row: TaskRow): Task {
-  const conf = row.ai_confidence === null || row.ai_confidence === undefined ? undefined : Number(row.ai_confidence);
+  const conf = row.ai_confidence === null || row.ai_confidence === undefined
+    ? undefined : Number(row.ai_confidence);
   return {
     id: row.id, company_id: row.company_id, title: row.title,
     description: row.description ?? undefined, due_at: row.due_at ?? undefined,
@@ -75,10 +75,14 @@ function mapTask(row: TaskRow): Task {
   };
 }
 
-function computeStats(tasks: Task[], decisions: AiFollowupDecision[]): StatsStripData {
+function computeStats(
+  tasks: Task[],
+  operationsInQueue: number,
+  operationsExecutedToday: number,
+): StatsStripData {
   const todayStr = new Date().toDateString();
   const completedToday = tasks.filter(t =>
-    t.status === 'done' && t.updated_at && new Date(t.updated_at).toDateString() === todayStr
+    t.status === 'done' && t.updated_at && new Date(t.updated_at).toDateString() === todayStr,
   ).length;
   const doneTasks = tasks.filter(t => t.status === 'done' && t.updated_at && t.created_at);
   const avgMs = doneTasks.length
@@ -86,10 +90,6 @@ function computeStats(tasks: Task[], decisions: AiFollowupDecision[]): StatsStri
     : 0;
   const avgMinutes = Math.max(1, Math.round(avgMs / 60000));
   const overdueCount = tasks.filter(t => isOverdue(t.due_at, t.status)).length;
-  const aiSuggested = decisions.length + tasks.filter(t => t.ai_generated).length;
-  const followupTotal = tasks.filter(isFollowupTask).length;
-  const followupDone = tasks.filter(t => isFollowupTask(t) && t.status === 'done').length;
-  const converted = followupTotal > 0 ? Math.round((followupDone / followupTotal) * 100) : 0;
   const pct = Math.min(100, Math.max(0, completedToday > 0 && tasks.length > 0
     ? Math.round((completedToday / Math.max(tasks.filter(t => t.status !== 'cancelled').length, 1)) * 100)
     : completedToday));
@@ -97,9 +97,8 @@ function computeStats(tasks: Task[], decisions: AiFollowupDecision[]): StatsStri
     completedToday: pct,
     avgMinutes: Math.min(avgMinutes, 999),
     overdue: overdueCount,
-    aiSuggested,
-    convertedAfterFollowup: converted,
-    convertedAfterFollowupDelta: 4,
+    operationsInQueue,
+    operationsExecutedToday,
   };
 }
 
@@ -112,11 +111,6 @@ export const Tasks: React.FC = () => {
 
   const [mainTab, setMainTab] = useState<MainTab>('atividades');
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [aiDecisions, setAiDecisions] = useState<AiFollowupDecision[]>([]);
-  const [agentName, setAgentName] = useState<string | undefined>(undefined);
-  const fetchAiDecisionsRef = useRef<() => Promise<void>>(() => Promise.resolve());
-  // IDs descartados/aceitos localmente — guard contra volta após re-fetch
-  const dismissedIdsRef = useRef<Set<string>>(new Set());
   const [loadedCompanyId, setLoadedCompanyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [teamMembers, setTeamMembers] = useState<{ id: string; full_name: string }[]>([]);
@@ -126,6 +120,20 @@ export const Tasks: React.FC = () => {
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
+  // ── Operações do agente (Autopilot) ────────────────────────────────────────
+  const {
+    operations: agentOperations,
+    operationsInQueue,
+    operationsExecutedToday,
+    autopilotEnabled,
+    updateMessage: updateOperationMessage,
+    reschedule: rescheduleOperation,
+    snooze: snoozeOperation,
+    cancel: cancelOperation,
+    toggleAutopilot,
+  } = useAgentOperations(companyId);
+
+  // ── Fetch de tarefas ──────────────────────────────────────────────────────
   const fetchTasks = useCallback(async () => {
     if (!companyId) { setTasks([]); setLoadedCompanyId(null); setLoading(false); return; }
     setLoading(true);
@@ -142,40 +150,8 @@ export const Tasks: React.FC = () => {
     setLoading(false);
   }, [companyId]);
 
-  const fetchAiDecisions = useCallback(async () => {
-    if (!companyId) { setAiDecisions([]); return; }
-
-    const [{ data: decisions }, { data: triggers }] = await Promise.all([
-      supabase.from('ai_followup_decisions').select('*').eq('company_id', companyId).eq('status', 'pending').order('created_at', { ascending: false }).limit(20),
-      supabase.from('conversation_followup_triggers').select('*').eq('company_id', companyId).eq('status', 'pending').order('created_at', { ascending: false }).limit(20),
-    ]);
-
-    const decisionItems = (decisions ?? []) as AiFollowupDecision[];
-
-    // IDs de triggers que já viraram decision — não duplicar
-    const processedTriggerIds = new Set(decisionItems.map(d => d.followup_trigger_id).filter(Boolean));
-
-    const triggerItems: AiFollowupDecision[] = ((triggers ?? []) as ConversationFollowupTrigger[])
-      .filter(t => !processedTriggerIds.has(t.id))
-      .map(t => ({
-        id: `trigger:${t.id}`,
-        company_id: t.company_id,
-        contact_id: t.contact_id,
-        conversation_id: t.conversation_id,
-        detected_event: t.detected_event,
-        recommended_action: t.recommended_action,
-        recommended_message: t.recommended_message,
-        suggested_due_at: t.expected_reply_until,
-        confidence: t.ai_confidence,
-        requires_human_approval: true,
-        status: 'pending' as const,
-        created_at: t.created_at,
-      }));
-
-    const allItems = [...decisionItems, ...triggerItems];
-    setAiDecisions(allItems.filter(d => !dismissedIdsRef.current.has(d.id)));
-  }, [companyId]);
-  fetchAiDecisionsRef.current = fetchAiDecisions;
+  const fetchTasksRef = useRef(fetchTasks);
+  useEffect(() => { fetchTasksRef.current = fetchTasks; });
 
   const fetchTeamMembers = useCallback(async () => {
     if (!companyId) { setTeamMembers([]); return; }
@@ -186,39 +162,16 @@ export const Tasks: React.FC = () => {
       .filter(m => m.id));
   }, [companyId]);
 
-  const fetchAgentName = useCallback(async () => {
-    if (!companyId) { setAgentName(undefined); return; }
-    const { data } = await supabase
-      .from('ai_agents')
-      .select('name')
-      .eq('company_id', companyId)
-      .eq('is_active', true)
-      .limit(1)
-      .maybeSingle();
-    setAgentName((data as { name?: string } | null)?.name ?? undefined);
-  }, [companyId]);
-
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void fetchTasks(); }, [fetchTasks]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void fetchAiDecisions(); }, [fetchAiDecisions]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void fetchTeamMembers(); }, [fetchTeamMembers]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void fetchAgentName(); }, [fetchAgentName]);
 
+  // Realtime para tarefas
   useEffect(() => {
     if (!companyId) return;
     const channel = supabase
-      .channel(`mission-control-${companyId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversation_followup_triggers', filter: `company_id=eq.${companyId}` },
-        () => { void fetchAiDecisionsRef.current(); })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversation_followup_triggers', filter: `company_id=eq.${companyId}` },
-        () => { void fetchAiDecisionsRef.current(); })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ai_followup_decisions', filter: `company_id=eq.${companyId}` },
-        () => { void fetchAiDecisionsRef.current(); })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ai_followup_decisions', filter: `company_id=eq.${companyId}` },
-        () => { void fetchAiDecisionsRef.current(); })
+      .channel(`tasks-rt-${companyId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `company_id=eq.${companyId}` },
+        () => { void fetchTasksRef.current(); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [companyId]);
@@ -229,6 +182,7 @@ export const Tasks: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  // ── Mutações de tarefas ───────────────────────────────────────────────────
   const handleStatusChange = async (taskId: string, status: TaskStatus) => {
     if (!companyId) return;
     const prev = tasks.find(t => t.id === taskId);
@@ -246,81 +200,21 @@ export const Tasks: React.FC = () => {
     if ('due_at' in changes) updatePayload.due_at = changes.due_at;
     if ('priority' in changes) updatePayload.priority = changes.priority;
     const { error } = await supabase.from('tasks').update(updatePayload).eq('id', id).eq('company_id', companyId);
-    if (error) {
-      console.error('Failed to update task', error);
-      return;
-    }
+    if (error) { console.error('Failed to update task', error); return; }
     const updatedAt = new Date().toISOString();
     setTasks(ts => ts.map(t => t.id === id ? { ...t, ...changes, updated_at: updatedAt } : t));
     setSelectedTask(s => s?.id === id ? { ...s, ...changes, updated_at: updatedAt } : s);
   };
 
-  const handleAcceptDecision = async (id: string) => {
-    if (!companyId) return;
-    const decision = aiDecisions.find(d => d.id === id);
-    if (!decision) return;
-
-    const isTrigger = id.startsWith('trigger:');
-    const originalId = isTrigger ? id.replace('trigger:', '') : id;
-
-    const fallbackDue = new Date();
-    fallbackDue.setDate(fallbackDue.getDate() + 1);
-    fallbackDue.setHours(9, 0, 0, 0);
-
-    const recommendedAction = decision.recommended_action?.trim() || '';
-    const { error: taskError } = await supabase.from('tasks').insert({
-      company_id: companyId,
-      title: recommendedAction.slice(0, 80) || 'Follow-up sugerido pela IA',
-      description: decision.recommended_action ?? null,
-      recommended_message: decision.recommended_message ?? null,
-      source_type: 'followup_trigger',
-      ai_generated: true,
-      ai_confidence: decision.confidence ?? null,
-      contact_id: decision.contact_id,
-      conversation_id: decision.conversation_id,
-      status: 'open',
-      priority: 'high',
-      due_at: decision.suggested_due_at ?? fallbackDue.toISOString(),
-      created_by: user?.id ?? null,
+  // ── Cancelamento de operação com toast ────────────────────────────────────
+  const handleCancelOperation = (id: string) => {
+    void cancelOperation(id).then(r => {
+      if (r.success) setToast('Operação cancelada.');
     });
-    if (taskError) {
-      console.error('Failed to create task from AI decision', taskError);
-      return;
-    }
-
-    // Marca como descartado antes de qualquer await para evitar volta por re-fetch concorrente
-    dismissedIdsRef.current = new Set([...dismissedIdsRef.current, id]);
-    setAiDecisions(prev => prev.filter(d => d.id !== id));
-
-    if (isTrigger) {
-      const { error: rpcErr } = await supabase.rpc('rpc_process_followup_trigger', { p_company_id: companyId, p_trigger_id: originalId });
-      if (rpcErr) console.error('[rpc_process_followup_trigger]', rpcErr.message);
-    } else {
-      await supabase.from('ai_followup_decisions').update({ status: 'converted_to_task' }).eq('id', originalId).eq('company_id', companyId);
-    }
-
-    await fetchTasks();
-    setToast('Tarefa criada! Aparece em Próximas.');
-  };
-
-  const handleDiscardDecision = async (id: string) => {
-    if (!companyId) return;
-    const isTrigger = id.startsWith('trigger:');
-    const originalId = isTrigger ? id.replace('trigger:', '') : id;
-
-    dismissedIdsRef.current = new Set([...dismissedIdsRef.current, id]);
-    setAiDecisions(prev => prev.filter(d => d.id !== id));
-
-    if (isTrigger) {
-      const { error: rpcErr } = await supabase.rpc('rpc_cancel_followup_trigger', { p_company_id: companyId, p_trigger_id: originalId });
-      if (rpcErr) console.error('[rpc_cancel_followup_trigger]', rpcErr.message);
-    } else {
-      await supabase.from('ai_followup_decisions').update({ status: 'ignored' }).eq('id', originalId).eq('company_id', companyId);
-    }
   };
 
   const currentTasks = loadedCompanyId === companyId ? tasks : [];
-  const stats = computeStats(currentTasks, aiDecisions);
+  const stats = computeStats(currentTasks, operationsInQueue, operationsExecutedToday);
 
   return (
     <div className="flex h-full flex-col">
@@ -336,9 +230,9 @@ export const Tasks: React.FC = () => {
               <span className="pulse-rose h-1.5 w-1.5 rounded-full bg-rose-400" />
               <span className="font-mono text-[10px] uppercase tracking-widest text-stone-500">Central operacional</span>
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-primary">Mission Control</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-primary">Tarefas</h1>
             <p className="mt-1 max-w-2xl text-sm leading-relaxed text-text-muted">
-              Tarefas, follow-ups e decisões da IA num único painel operacional.
+              Tarefas manuais e operações do Autopilot num único painel operacional.
             </p>
           </div>
 
@@ -367,11 +261,13 @@ export const Tasks: React.FC = () => {
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowCreateMenu(false)} />
                 <div className="absolute right-0 top-10 z-20 w-44 rounded-lg border border-border bg-surface py-1.5 shadow-2xl">
-                  <button type="button" onClick={() => { setShowWizard(true); setMainTab('cadencias'); setShowCreateMenu(false); }}
+                  <button type="button"
+                    onClick={() => { setShowWizard(true); setMainTab('cadencias'); setShowCreateMenu(false); }}
                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-primary">
                     <Layers size={13} />Nova cadência
                   </button>
-                  <button type="button" onClick={() => { setShowWizard(true); setMainTab('cadencias'); setShowCreateMenu(false); }}
+                  <button type="button"
+                    onClick={() => { setShowWizard(true); setMainTab('cadencias'); setShowCreateMenu(false); }}
                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text-muted transition-colors hover:bg-surface-hover hover:text-primary">
                     <Sparkles size={13} />Novo template IA
                   </button>
@@ -416,21 +312,28 @@ export const Tasks: React.FC = () => {
             {/* Loading skeleton */}
             {loading ? (
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                {[1,2,3,4].map(i => (
-                  <div key={i} className="bento-card-animate h-48 animate-pulse rounded-2xl border border-border bg-surface" style={{ animationDelay: `${i * 60}ms` }} />
+                {[1, 2, 3, 4].map(i => (
+                  <div
+                    key={i}
+                    className="bento-card-animate h-48 animate-pulse rounded-2xl border border-border bg-surface"
+                    style={{ animationDelay: `${i * 60}ms` }}
+                  />
                 ))}
               </div>
             ) : (
               <MissionControlBento
                 tasks={currentTasks}
-                aiDecisions={aiDecisions}
-                agentName={agentName}
+                agentOperations={agentOperations}
+                autopilotEnabled={autopilotEnabled}
+                onToggleAutopilot={() => { void toggleAutopilot(); }}
+                onUpdateOperationMessage={updateOperationMessage}
+                onRescheduleOperation={rescheduleOperation}
+                onSnoozeOperation={snoozeOperation}
+                onCancelOperation={handleCancelOperation}
                 onStatusChange={handleStatusChange}
                 onOpenConversation={id => navigate(`/inbox/${id}`)}
                 onTaskClick={t => setSelectedTask(t)}
                 onEditTask={t => setSelectedTask(t)}
-                onAcceptDecision={handleAcceptDecision}
-                onDiscardDecision={handleDiscardDecision}
                 onAddTask={() => setShowNewTask(true)}
               />
             )}
@@ -496,6 +399,7 @@ export const Tasks: React.FC = () => {
         />
       )}
 
+      {/* ── Toast ── */}
       {toast && (
         <div className="fixed bottom-5 right-5 z-[70] rounded-lg border border-emerald-500/30 bg-emerald-500 px-4 py-3 text-sm font-medium text-white shadow-2xl shadow-emerald-950/30">
           {toast}

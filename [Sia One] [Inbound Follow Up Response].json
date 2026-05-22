@@ -1,0 +1,134 @@
+{
+  "name": "[Sia One] [Inbound Follow Up Response]",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [200, 300],
+      "id": "b1c2d3e4-f5a6-7890-bcde-f01234567801",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Valida payload de entrada.\n// Esperado: company_id, contact_id, conversation_id (opcional), message_id (bigint), received_at.\nconst input = $input.first().json;\n\nconst company_id      = input.company_id      || null;\nconst contact_id      = input.contact_id      || null;\nconst conversation_id = input.conversation_id || null;\nconst message_id      = input.message_id      || null;   // bigint da tabela messages\nconst received_at     = input.received_at     || new Date().toISOString();\n\nif (!company_id) {\n  console.log('[follow_up_rpc_error] inbound_response: company_id ausente');\n  return [{ json: { skip: true, reason: 'no_company_id' } }];\n}\nif (!contact_id) {\n  console.log('[follow_up_rpc_error] inbound_response: contact_id ausente');\n  return [{ json: { skip: true, reason: 'no_contact_id' } }];\n}\n\nconsole.log('[follow_up_check_started] inbound_response' +\n  ' company_id='    + company_id +\n  ' contact_id='    + contact_id +\n  ' conversation_id=' + conversation_id +\n  ' message_id='    + message_id);\n\nreturn [{\n  json: {\n    company_id,\n    contact_id,\n    conversation_id,\n    message_id,\n    received_at,\n    skip: false\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300],
+      "id": "b1c2d3e4-f5a6-7890-bcde-f01234567802",
+      "name": "validate_inbound_payload"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b1c2d3e4-f5a6-7890-bcde-f01234567821",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [700, 300],
+      "id": "b1c2d3e4-f5a6-7890-bcde-f01234567803",
+      "name": "check_valid_payload"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_register_follow_up_response",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  p_company_id:          $json.company_id,\n  p_contact_id:          $json.contact_id,\n  p_conversation_id:     $json.conversation_id || null,\n  p_response_message_id: $json.message_id      || null,\n  p_received_at:         $json.received_at\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [950, 200],
+      "id": "b1c2d3e4-f5a6-7890-bcde-f01234567804",
+      "name": "register_follow_up_response",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Interpreta e loga resultado da atribuição.\n// attributed=true: resposta foi atribuída ao follow-up ativo — ciclo encerrado.\n// attributed=false: resposta fora da janela ou sem follow-up ativo — fluxo normal.\nconst input   = $input.first().json;\nconst ctx     = $('validate_inbound_payload').first().json;\n\nif (input && input.attributed === true) {\n  console.log('[follow_up_response_attributed]' +\n    ' company_id='         + ctx.company_id +\n    ' contact_id='         + ctx.contact_id +\n    ' conversation_id='    + ctx.conversation_id +\n    ' follow_up_event_id=' + input.follow_up_event_id +\n    ' attempt_number='     + input.attempt_number +\n    ' response_lag_sec='   + input.response_lag_seconds);\n} else if (input && input.attributed === false) {\n  console.log('[follow_up_response_not_attributed]' +\n    ' company_id='      + ctx.company_id +\n    ' contact_id='      + ctx.contact_id +\n    ' conversation_id=' + ctx.conversation_id +\n    ' (fora da janela ou sem follow-up ativo)');\n} else {\n  console.log('[follow_up_rpc_error] register_follow_up_response inesperado: ' + JSON.stringify(input));\n}\n\nreturn [{ json: {\n  success:            input ? input.success            : false,\n  attributed:         input ? input.attributed         : false,\n  follow_up_event_id: input ? input.follow_up_event_id : null,\n  attempt_number:     input ? input.attempt_number     : null,\n  response_lag_seconds: input ? input.response_lag_seconds : null\n}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 200],
+      "id": "b1c2d3e4-f5a6-7890-bcde-f01234567805",
+      "name": "log_response_result"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [700, 450],
+      "id": "b1c2d3e4-f5a6-7890-bcde-f01234567806",
+      "name": "skip_invalid_payload"
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [[{ "node": "validate_inbound_payload", "type": "main", "index": 0 }]]
+    },
+    "validate_inbound_payload": {
+      "main": [[{ "node": "check_valid_payload", "type": "main", "index": 0 }]]
+    },
+    "check_valid_payload": {
+      "main": [
+        [{ "node": "register_follow_up_response", "type": "main", "index": 0 }],
+        [{ "node": "skip_invalid_payload",         "type": "main", "index": 0 }]
+      ]
+    },
+    "register_follow_up_response": {
+      "main": [[{ "node": "log_response_result", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "b1c2d3e4-f5a6-7890-bcde-f01234567800",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "7e44dba8003e8ae6a7e9a2d983d63ce1a03b6fc6d0baad5c615d2e5c3f6e4030"
+  },
+  "id": "SiaOneInboundFollowUpResponse01",
+  "tags": []
+}

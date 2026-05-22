@@ -433,6 +433,121 @@ export interface AiAgentBinding {
   created_at: string;
 }
 
+// ===== AGENT OPERATIONS (Autopilot) =====
+
+export type AgentOperationType = 'follow_up' | 'escalate' | 'confirm' | 'rescue';
+
+export type AgentOperationLabel = 'FOLLOW-UP' | 'ESCALAR' | 'CONFIRMAR' | 'RESGATE';
+
+export type AgentOperationStatus =
+  | 'queued'
+  | 'sending'
+  | 'sent'
+  | 'cancelled'
+  | 'failed'
+  | 'paused'
+  | 'needs_reschedule';
+
+export interface AgentOperation {
+  id: string;
+  company_id: string;
+
+  contact_id: string | null;
+  contact_name: string;
+  contact_initials: string;
+
+  operation_type: AgentOperationType;
+  operation_label: AgentOperationLabel;
+
+  context: string;
+  message: string;
+
+  channel: 'whatsapp' | 'email';
+
+  send_at: string;
+
+  status: AgentOperationStatus;
+
+  reason: string | null;
+
+  source: 'agent';
+
+  agent_id?: string | null;
+  workflow_id?: string | null;
+  cadence_id?: string | null;
+  task_id?: string | null;
+
+  idempotency_key?: string | null;
+
+  created_at: string;
+  updated_at: string;
+}
+
+// ===== FOLLOW-UP STATE =====
+
+export type FollowUpCycleStatus =
+  | 'active'
+  | 'paused'
+  | 'stopped'
+  | 'responded'
+  | 'completed'
+  | null;
+
+export type FollowUpBlockReason =
+  | 'ok'
+  | 'contact_not_found'
+  | 'conversation_not_found'
+  | 'deal_not_found'
+  | 'opt_out'
+  | 'autopilot_disabled'
+  | 'cycle_stopped'
+  | 'max_attempts_reached'
+  | 'min_interval_not_elapsed'
+  | 'human_recently_engaged'
+  | 'outside_business_hours'
+  | 'invalid_channel'
+  | (string & Record<never, never>)
+  | null;
+
+export interface FollowUpState {
+  cycle_status: FollowUpCycleStatus;
+  attempt_count: number;
+  max_attempts: number;
+  last_follow_sent_at: string | null;
+  next_allowed_at: string | null;
+  has_responded: boolean;
+  responded_at: string | null;
+  can_send: boolean;
+  block_reason: FollowUpBlockReason;
+  opt_out: boolean;
+  cycle_id: string | null;
+}
+
+export type FollowUpFollowType = 'agent_auto' | 'cadence_step' | 'human_manual' | 'human_bulk' | 'system_rescue';
+export type FollowUpChannel = 'whatsapp' | 'email' | 'sms' | 'internal';
+export type FollowUpEventStatus =
+  | 'scheduled'
+  | 'sent'
+  | 'delivered'
+  | 'failed'
+  | 'cancelled'
+  | 'responded'
+  | 'expired'
+  | 'stopped';
+
+export interface FollowUpHistoryItem {
+  id: string;
+  follow_type: FollowUpFollowType;
+  channel: FollowUpChannel;
+  attempt_number: number;
+  status: FollowUpEventStatus;
+  sent_at: string;
+  next_allowed_at: string | null;
+  attribution_until: string | null;
+  responded_at: string | null;
+  stopped_reason: string | null;
+}
+
 // ===== CONVERSATIONS & MESSAGES =====
 
 export type ConversationStatus = 'open' | 'closed' | 'pending';

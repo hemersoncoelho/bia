@@ -1,0 +1,759 @@
+{
+  "name": "[Sia One] [Process Due Followup Triggers]",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012301",
+      "name": "schedule_trigger"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_mark_followup_trigger_due",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [450, 300],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012302",
+      "name": "mark_triggers_due",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_get_due_followup_triggers",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_limit: 50 }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [700, 300],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012303",
+      "name": "get_due_triggers",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Converte o array de triggers em itens individuais para processamento.\n// Se não houver triggers, retorna array vazio (interrompe fluxo naturalmente).\nconst response = $input.first().json;\nconst triggers = Array.isArray(response) ? response : [];\n\nif (triggers.length === 0) {\n  // Log: nenhum trigger a processar neste ciclo\n  console.log('[follow_up_check_started] nenhum trigger due encontrado');\n  return [];\n}\n\nconsole.log('[follow_up_check_started] triggers_due=' + triggers.length);\n\nreturn triggers.map(t => ({ json: t }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [950, 300],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012304",
+      "name": "split_trigger_items"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrai campos do trigger e monta idempotency_key estável.\n// A mesma intenção de follow-up deve gerar sempre a mesma chave.\nconst t = $input.item.json;\n\nconst company_id      = t.company_id      || null;\nconst contact_id      = t.contact_id      || null;\nconst conversation_id = t.conversation_id || null;\nconst trigger_id      = t.trigger_id      || null;\nconst trigger_type    = t.trigger_type    || 'no_response_after_ai_question';\nconst detected_event  = t.detected_event  || null;\n\n// Mensagem recomendada: usar recommended_message do trigger (decisão da IA na criação)\nconst recommended_message = (\n  t.recommended_message ||\n  t.reason ||\n  'Olá! Tudo bem? Queria dar continuidade à nossa conversa. Posso ajudar com algo?'\n).trim();\n\n// Idempotency key estável: fup_{company_id}_{contact_id}_{conversation_id}_{trigger_id}\n// Evita duplicidade se o cron rodar duas vezes antes de marcar o trigger como processed.\nconst idempotency_key = [\n  'fup',\n  company_id   || 'nocompany',\n  contact_id   || 'nocontact',\n  conversation_id || 'noconv',\n  trigger_id   || 'notrigger'\n].join('_');\n\nif (!company_id || !contact_id) {\n  console.log('[follow_up_rpc_error] trigger sem company_id ou contact_id: ' + trigger_id);\n  return [];\n}\n\nreturn [{\n  json: {\n    company_id,\n    contact_id,\n    conversation_id,\n    trigger_id,\n    trigger_type,\n    detected_event,\n    recommended_message,\n    idempotency_key\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 300],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012305",
+      "name": "build_context"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_can_send_follow_up",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  p_company_id:      $json.company_id,\n  p_contact_id:      $json.contact_id,\n  p_conversation_id: $json.conversation_id || null,\n  p_channel:         'whatsapp'\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1450, 300],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012306",
+      "name": "can_send_check",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f3a4b5c6-d7e8-9012-fab3-456789012321",
+              "leftValue": "={{ $json.allowed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [1700, 300],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012307",
+      "name": "route_allowed"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/contact_identities?contact_id=eq.' + $('build_context').item.json.contact_id + '&company_id=eq.' + $('build_context').item.json.company_id + '&channel_type=eq.whatsapp&select=normalized_value&limit=1' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [1950, 100],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012308",
+      "name": "get_contact_phone",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_get_company_integration",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_company_id: $('build_context').item.json.company_id }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2200, 100],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012309",
+      "name": "get_company_integration",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Valida telefone e integração, e monta payload para envio.\nconst ctx         = $('build_context').item.json;\nconst can_send    = $('can_send_check').item.json;\nconst phoneArr    = $('get_contact_phone').item.json;\nconst integration = $('get_company_integration').item.json;\n\n// Extrair telefone: PostgREST retorna array de objetos\nconst phone = Array.isArray(phoneArr) && phoneArr[0]\n  ? (phoneArr[0].normalized_value || null)\n  : null;\n\nif (!phone) {\n  console.log('[follow_up_rpc_error] telefone não encontrado para contato: ' + ctx.contact_id);\n  return [{ json: { ...ctx, skip: true, skip_reason: 'no_phone' } }];\n}\n\nif (!integration || !integration.success || !integration.instance_token) {\n  console.log('[follow_up_rpc_error] integração UAZAPI não encontrada para empresa: ' + ctx.company_id);\n  return [{ json: { ...ctx, skip: true, skip_reason: 'no_uazapi_integration' } }];\n}\n\nreturn [{\n  json: {\n    company_id:       ctx.company_id,\n    contact_id:       ctx.contact_id,\n    conversation_id:  ctx.conversation_id,\n    trigger_id:       ctx.trigger_id,\n    trigger_type:     ctx.trigger_type,\n    idempotency_key:  ctx.idempotency_key,\n    recommended_message: ctx.recommended_message,\n    phone,\n    instance_token:   integration.instance_token,\n    instance_id:      integration.instance_id,\n    attempt_number:   can_send.attempt_number || 1,\n    cycle_id:         can_send.cycle_id       || null,\n    skip:             false\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2450, 100],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012310",
+      "name": "prepare_send"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f3a4b5c6-d7e8-9012-fab3-456789012322",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [2700, 100],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012311",
+      "name": "check_ready_to_send"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://simplifique.uazapi.com/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Accept", "value": "application/json" },
+            { "name": "token", "value": "={{ $json.instance_token }}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "number",   "value": "={{ $json.phone }}" },
+            { "name": "text",     "value": "={{ $json.recommended_message }}" },
+            { "name": "delay",    "value": "2000" },
+            { "name": "readchat", "value": "true" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2950, 100],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012312",
+      "name": "send_whatsapp",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f3a4b5c6-d7e8-9012-fab3-456789012323",
+              "leftValue": "={{ $json.key != null }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [3200, 100],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012313",
+      "name": "check_uazapi_ok"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_save_ai_message",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  p_company_id: $('prepare_send').item.json.company_id,\n  p_phone:      $('prepare_send').item.json.phone,\n  p_body:       $('prepare_send').item.json.recommended_message\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [3450, 100],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012314",
+      "name": "save_ai_message",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/agent_operations?company_id=eq.' + $('prepare_send').item.json.company_id + '&conversation_id=eq.' + $('prepare_send').item.json.conversation_id + '&status=in.(queued,paused)&order=created_at.desc&limit=1&select=id,status' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [3700, 100],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012315",
+      "name": "get_operation_id",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Monta payload final para rpc_register_follow_up_sent.\n// Combina contexto, resultado do save_ai_message, UAZAPI key e operation_id.\nconst ctx       = $('prepare_send').item.json;\nconst uaResp    = $('send_whatsapp').item.json;\nconst saveResp  = $('save_ai_message').item.json;\nconst opsArr    = $input.item.json; // response do get_operation_id\n\n// external_message_id: UAZAPI retorna campo 'key'\nconst external_message_id = uaResp && uaResp.key ? String(uaResp.key) : null;\n\n// message_id: rpc_save_ai_message retorna campo 'message_id' (bigint)\nconst message_id = saveResp && saveResp.message_id ? saveResp.message_id : null;\n\n// operation_id: primeiro item do array retornado pelo GET\nconst ops = Array.isArray(opsArr) ? opsArr : [];\nconst operation_id = ops.length > 0 ? ops[0].id : null;\n\nreturn [{\n  json: {\n    // Passa context para próximos nós\n    company_id:           ctx.company_id,\n    contact_id:           ctx.contact_id,\n    conversation_id:      ctx.conversation_id,\n    trigger_id:           ctx.trigger_id,\n    operation_id,\n    message_id,\n    external_message_id,\n    idempotency_key:      ctx.idempotency_key,\n    cycle_id:             ctx.cycle_id,\n    // Payload para rpc_register_follow_up_sent\n    register_payload: {\n      p_company_id:          ctx.company_id,\n      p_contact_id:          ctx.contact_id,\n      p_conversation_id:     ctx.conversation_id     || null,\n      p_deal_id:             null,\n      p_task_id:             null,\n      p_operation_id:        operation_id             || null,\n      p_trigger_id:          ctx.trigger_id           || null,\n      p_cadence_id:          null,\n      p_cadence_step_id:     null,\n      p_follow_type:         'agent_auto',\n      p_channel:             'whatsapp',\n      p_message_id:          message_id               || null,\n      p_external_message_id: external_message_id      || null,\n      p_idempotency_key:     ctx.idempotency_key      || null,\n      p_metadata: {\n        workflow_name:  '[Sia One] [Process Due Followup Triggers]',\n        trigger_type:   ctx.trigger_type,\n        attempt_number: ctx.attempt_number\n      }\n    }\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3950, 100],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012316",
+      "name": "build_register_payload"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_register_follow_up_sent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.register_payload) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [4200, 100],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012317",
+      "name": "register_sent",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verifica resultado do register_sent e loga adequadamente.\n// duplicate=true: idempotência — não é erro.\n// success=false: erro técnico — logar.\nconst reg     = $input.item.json;\nconst ctx     = $('build_register_payload').item.json;\n\nif (reg && reg.duplicate === true) {\n  console.log('[follow_up_duplicate_ignored] idempotency_key=' + ctx.idempotency_key +\n    ' follow_up_event_id=' + reg.follow_up_event_id);\n} else if (reg && reg.success === true) {\n  console.log('[follow_up_sent_registered]' +\n    ' company_id='        + ctx.company_id +\n    ' contact_id='        + ctx.contact_id +\n    ' conversation_id='   + ctx.conversation_id +\n    ' trigger_id='        + ctx.trigger_id +\n    ' follow_up_event_id='+ reg.follow_up_event_id +\n    ' attempt_number='    + reg.attempt_number +\n    ' cycle_id='          + reg.cycle_id +\n    ' duplicate='         + reg.duplicate);\n} else {\n  console.log('[follow_up_rpc_error] rpc_register_follow_up_sent falhou:' +\n    JSON.stringify(reg));\n}\n\n// Passa tudo adiante para mark_trigger_processed\nreturn [{ json: {\n  company_id:      ctx.company_id,\n  trigger_id:      ctx.trigger_id,\n  operation_id:    ctx.operation_id,\n  follow_up_event_id: reg ? reg.follow_up_event_id : null,\n  register_success: reg ? (reg.success === true) : false,\n  duplicate:       reg ? reg.duplicate : false\n}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4450, 100],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012318",
+      "name": "check_register_result"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/agent_operations?id=eq.' + $json.operation_id + '&company_id=eq.' + $json.company_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer",       "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'sent', follow_up_event_id: $json.follow_up_event_id, updated_at: new Date().toISOString() }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [4700, 100],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012319",
+      "name": "update_operation_sent",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_n8n_process_due_trigger",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  p_company_id: $('check_register_result').item.json.company_id,\n  p_trigger_id: $('check_register_result').item.json.trigger_id\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [4950, 100],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012320",
+      "name": "mark_trigger_processed",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [5200, 100],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012330",
+      "name": "log_sent"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Falha no envio via UAZAPI. Logar e marcar trigger para retry.\n// O trigger permanece em 'due' neste caso para nova tentativa no próximo ciclo.\n// Não marcar como 'skipped' pois pode ser falha temporária de rede.\nconst ctx = $('prepare_send').item.json;\nconsole.log('[follow_up_rpc_error] falha_uazapi' +\n  ' company_id='   + ctx.company_id +\n  ' contact_id='   + ctx.contact_id +\n  ' trigger_id='   + ctx.trigger_id +\n  ' phone='        + ctx.phone);\nreturn [{ json: { logged: true, company_id: ctx.company_id, trigger_id: ctx.trigger_id } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3450, -100],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012331",
+      "name": "log_send_error"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparação não disponível (sem telefone ou sem integração UAZAPI).\n// Trigger será retentado no próximo ciclo.\nconst ctx = $json;\nconsole.log('[follow_up_blocked]' +\n  ' skip_reason=' + ctx.skip_reason +\n  ' company_id='  + ctx.company_id +\n  ' trigger_id='  + ctx.trigger_id);\nreturn [{ json: { logged: true } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2950, -100],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012332",
+      "name": "log_skip_no_data"
+    },
+    {
+      "parameters": {
+        "jsCode": "// allowed=false: extrair reason e decidir se precisa de stop_cycle.\nconst block  = $('can_send_check').item.json;\nconst ctx    = $('build_context').item.json;\n\nconst reason = block.reason || 'unknown';\n\n// Reasons que exigem stop_cycle explícito\nconst needs_stop_reasons = ['max_attempts_reached', 'opt_out', 'cycle_stopped'];\nconst needs_stop = needs_stop_reasons.includes(reason);\n\n// Mapear reason do can_send → reason do stop_cycle\nconst stop_reason_map = {\n  'max_attempts_reached': 'max_attempts_reached',\n  'opt_out':              'opt_out',\n  'cycle_stopped':        'manual_cancel'\n};\nconst stop_reason = stop_reason_map[reason] || 'manual_cancel';\n\n// Reason para marcar o trigger como skipped\nconst skip_reason = 'follow_up_blocked_' + reason;\n\nconsole.log('[follow_up_blocked]' +\n  ' company_id='    + ctx.company_id +\n  ' contact_id='    + ctx.contact_id +\n  ' conversation_id='+ ctx.conversation_id +\n  ' trigger_id='    + ctx.trigger_id +\n  ' reason='        + reason +\n  ' needs_stop='    + needs_stop);\n\nreturn [{\n  json: {\n    company_id:      ctx.company_id,\n    contact_id:      ctx.contact_id,\n    conversation_id: ctx.conversation_id || null,\n    trigger_id:      ctx.trigger_id,\n    reason,\n    needs_stop,\n    stop_reason,\n    skip_reason\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1950, 500],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012340",
+      "name": "parse_block"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f3a4b5c6-d7e8-9012-fab3-456789012324",
+              "leftValue": "={{ $json.needs_stop }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [2200, 500],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012341",
+      "name": "check_needs_stop"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_stop_follow_up_cycle",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  p_company_id:      $json.company_id,\n  p_contact_id:      $json.contact_id,\n  p_conversation_id: $json.conversation_id || null,\n  p_deal_id:         null,\n  p_reason:          $json.stop_reason\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2450, 380],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012342",
+      "name": "stop_cycle",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_n8n_skip_due_trigger",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  p_company_id: $('parse_block').item.json.company_id,\n  p_trigger_id: $('parse_block').item.json.trigger_id,\n  p_reason:     $('parse_block').item.json.skip_reason\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2700, 380],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012343",
+      "name": "mark_trigger_skipped_stop",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_n8n_skip_due_trigger",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  p_company_id: $json.company_id,\n  p_trigger_id: $json.trigger_id,\n  p_reason:     $json.skip_reason\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [2450, 620],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012344",
+      "name": "mark_trigger_skipped_block",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2950, 500],
+      "id": "f3a4b5c6-d7e8-9012-fab3-456789012345",
+      "name": "log_blocked"
+    }
+  ],
+  "connections": {
+    "schedule_trigger": {
+      "main": [[{ "node": "mark_triggers_due", "type": "main", "index": 0 }]]
+    },
+    "mark_triggers_due": {
+      "main": [[{ "node": "get_due_triggers", "type": "main", "index": 0 }]]
+    },
+    "get_due_triggers": {
+      "main": [[{ "node": "split_trigger_items", "type": "main", "index": 0 }]]
+    },
+    "split_trigger_items": {
+      "main": [[{ "node": "build_context", "type": "main", "index": 0 }]]
+    },
+    "build_context": {
+      "main": [[{ "node": "can_send_check", "type": "main", "index": 0 }]]
+    },
+    "can_send_check": {
+      "main": [[{ "node": "route_allowed", "type": "main", "index": 0 }]]
+    },
+    "route_allowed": {
+      "main": [
+        [{ "node": "get_contact_phone", "type": "main", "index": 0 }],
+        [{ "node": "parse_block",        "type": "main", "index": 0 }]
+      ]
+    },
+    "get_contact_phone": {
+      "main": [[{ "node": "get_company_integration", "type": "main", "index": 0 }]]
+    },
+    "get_company_integration": {
+      "main": [[{ "node": "prepare_send", "type": "main", "index": 0 }]]
+    },
+    "prepare_send": {
+      "main": [[{ "node": "check_ready_to_send", "type": "main", "index": 0 }]]
+    },
+    "check_ready_to_send": {
+      "main": [
+        [{ "node": "send_whatsapp",   "type": "main", "index": 0 }],
+        [{ "node": "log_skip_no_data","type": "main", "index": 0 }]
+      ]
+    },
+    "send_whatsapp": {
+      "main": [[{ "node": "check_uazapi_ok", "type": "main", "index": 0 }]]
+    },
+    "check_uazapi_ok": {
+      "main": [
+        [{ "node": "save_ai_message", "type": "main", "index": 0 }],
+        [{ "node": "log_send_error",  "type": "main", "index": 0 }]
+      ]
+    },
+    "save_ai_message": {
+      "main": [[{ "node": "get_operation_id", "type": "main", "index": 0 }]]
+    },
+    "get_operation_id": {
+      "main": [[{ "node": "build_register_payload", "type": "main", "index": 0 }]]
+    },
+    "build_register_payload": {
+      "main": [[{ "node": "register_sent", "type": "main", "index": 0 }]]
+    },
+    "register_sent": {
+      "main": [[{ "node": "check_register_result", "type": "main", "index": 0 }]]
+    },
+    "check_register_result": {
+      "main": [[{ "node": "update_operation_sent", "type": "main", "index": 0 }]]
+    },
+    "update_operation_sent": {
+      "main": [[{ "node": "mark_trigger_processed", "type": "main", "index": 0 }]]
+    },
+    "mark_trigger_processed": {
+      "main": [[{ "node": "log_sent", "type": "main", "index": 0 }]]
+    },
+    "parse_block": {
+      "main": [[{ "node": "check_needs_stop", "type": "main", "index": 0 }]]
+    },
+    "check_needs_stop": {
+      "main": [
+        [{ "node": "stop_cycle",               "type": "main", "index": 0 }],
+        [{ "node": "mark_trigger_skipped_block","type": "main", "index": 0 }]
+      ]
+    },
+    "stop_cycle": {
+      "main": [[{ "node": "mark_trigger_skipped_stop", "type": "main", "index": 0 }]]
+    },
+    "mark_trigger_skipped_stop": {
+      "main": [[{ "node": "log_blocked", "type": "main", "index": 0 }]]
+    },
+    "mark_trigger_skipped_block": {
+      "main": [[{ "node": "log_blocked", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567801",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "7e44dba8003e8ae6a7e9a2d983d63ce1a03b6fc6d0baad5c615d2e5c3f6e4030"
+  },
+  "id": "SiaOneProcessDueFollowupTriggers01",
+  "tags": []
+}

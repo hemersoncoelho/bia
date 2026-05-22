@@ -1,0 +1,134 @@
+{
+  "name": "[Sia One] [CRM Event Stop Cycle]",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [200, 300],
+      "id": "c1d2e3f4-a5b6-7890-cdef-012345678901",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Valida payload de entrada e decide o stop_reason correto.\n//\n// Payload esperado:\n//   company_id      : uuid (obrigatório)\n//   contact_id      : uuid (obrigatório)\n//   conversation_id : uuid (opcional)\n//   deal_id         : uuid (opcional)\n//   event_type      : string — tipo do evento CRM\n//\n// event_type → stop_reason mapping:\n//   deal_won              → deal_won\n//   deal_lost             → deal_lost\n//   deal_stage_changed    → deal_stage_changed\n//   meeting_booked        → meeting_booked\n//   human_took_over       → human_took_over\n//   conversation_closed   → conversation_closed\n//   opt_out               → opt_out\n//   manual                → manual_cancel\n\nconst input = $input.first().json;\n\nconst company_id      = input.company_id      || null;\nconst contact_id      = input.contact_id      || null;\nconst conversation_id = input.conversation_id || null;\nconst deal_id         = input.deal_id         || null;\nconst event_type      = input.event_type      || 'manual';\n\nif (!company_id || !contact_id) {\n  console.log('[follow_up_rpc_error] crm_stop_cycle: company_id ou contact_id ausente');\n  return [{ json: { skip: true, reason: 'missing_ids' } }];\n}\n\nconst reason_map = {\n  'deal_won':            'deal_won',\n  'deal_lost':           'deal_lost',\n  'deal_stage_changed':  'deal_stage_changed',\n  'meeting_booked':      'meeting_booked',\n  'human_took_over':     'human_took_over',\n  'conversation_closed': 'conversation_closed',\n  'opt_out':             'opt_out',\n  'manual':              'manual_cancel',\n  'cadence_paused':      'cadence_paused',\n  'autopilot_disabled':  'autopilot_disabled'\n};\n\nconst stop_reason = reason_map[event_type] || 'manual_cancel';\n\nconsole.log('[follow_up_cycle_stopped]' +\n  ' event_type='     + event_type +\n  ' stop_reason='    + stop_reason +\n  ' company_id='     + company_id +\n  ' contact_id='     + contact_id +\n  ' conversation_id='+ conversation_id +\n  ' deal_id='        + deal_id);\n\nreturn [{\n  json: {\n    company_id,\n    contact_id,\n    conversation_id,\n    deal_id,\n    event_type,\n    stop_reason,\n    skip: false\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300],
+      "id": "c1d2e3f4-a5b6-7890-cdef-012345678902",
+      "name": "validate_crm_event"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c1d2e3f4-a5b6-7890-cdef-012345678921",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [700, 300],
+      "id": "c1d2e3f4-a5b6-7890-cdef-012345678903",
+      "name": "check_valid_event"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_stop_follow_up_cycle",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  p_company_id:      $json.company_id,\n  p_contact_id:      $json.contact_id,\n  p_conversation_id: $json.conversation_id || null,\n  p_deal_id:         $json.deal_id         || null,\n  p_reason:          $json.stop_reason\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [950, 200],
+      "id": "c1d2e3f4-a5b6-7890-cdef-012345678904",
+      "name": "stop_follow_up_cycle",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loga resultado do stop cycle.\n// was_active=false é OK — significa que não havia ciclo ativo (idempotente).\nconst result = $input.first().json;\nconst ctx    = $('validate_crm_event').first().json;\n\nif (result && result.success) {\n  if (result.was_active) {\n    console.log('[follow_up_cycle_stopped]' +\n      ' event='                + ctx.event_type +\n      ' reason='               + ctx.stop_reason +\n      ' company_id='           + ctx.company_id +\n      ' contact_id='           + ctx.contact_id +\n      ' cycle_id='             + result.cycle_id +\n      ' cancelled_operations=' + result.cancelled_operations +\n      ' cancelled_triggers='   + result.cancelled_triggers);\n  } else {\n    console.log('[follow_up_cycle_stopped] nenhum ciclo ativo encontrado' +\n      ' event='    + ctx.event_type +\n      ' company_id='+ ctx.company_id +\n      ' contact_id='+ ctx.contact_id +\n      ' (was_active=false — idempotente)');\n  }\n} else {\n  console.log('[follow_up_rpc_error] stop_follow_up_cycle falhou:' + JSON.stringify(result));\n}\n\nreturn [{ json: {\n  success:              result ? result.success              : false,\n  was_active:           result ? result.was_active           : false,\n  cycle_id:             result ? result.cycle_id             : null,\n  cancelled_operations: result ? result.cancelled_operations : 0,\n  cancelled_triggers:   result ? result.cancelled_triggers   : 0\n}}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 200],
+      "id": "c1d2e3f4-a5b6-7890-cdef-012345678905",
+      "name": "log_stop_result"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [700, 450],
+      "id": "c1d2e3f4-a5b6-7890-cdef-012345678906",
+      "name": "skip_invalid_event"
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [[{ "node": "validate_crm_event", "type": "main", "index": 0 }]]
+    },
+    "validate_crm_event": {
+      "main": [[{ "node": "check_valid_event", "type": "main", "index": 0 }]]
+    },
+    "check_valid_event": {
+      "main": [
+        [{ "node": "stop_follow_up_cycle", "type": "main", "index": 0 }],
+        [{ "node": "skip_invalid_event",   "type": "main", "index": 0 }]
+      ]
+    },
+    "stop_follow_up_cycle": {
+      "main": [[{ "node": "log_stop_result", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "c1d2e3f4-a5b6-7890-cdef-012345678900",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "7e44dba8003e8ae6a7e9a2d983d63ce1a03b6fc6d0baad5c615d2e5c3f6e4030"
+  },
+  "id": "SiaOneCRMEventStopCycle01",
+  "tags": []
+}
