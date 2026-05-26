@@ -342,7 +342,7 @@ export const Tasks: React.FC = () => {
               </div>
             ) : (
               <MissionControlBento
-                companyId={companyId}
+                companyId={companyId!}
                 tasks={currentTasks}
                 agentOperations={agentOperations}
                 autopilotEnabled={autopilotEnabled}
