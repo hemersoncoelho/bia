@@ -13,7 +13,7 @@ import { CadenceWizard } from '../components/Tasks/CadenceWizard';
 import { StatsStrip } from '../components/Tasks/StatsStrip';
 import type { StatsStripData } from '../components/Tasks/StatsStrip';
 import { MissionControlBento } from '../components/Tasks/MissionControlBento';
-import type { Task, TaskStatus, TaskPriority, TaskSourceType } from '../types';
+import type { Task, TaskStatus, TaskPriority, TaskSourceType, CadenceTemplate } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type MainTab = 'atividades' | 'cadencias';
@@ -119,6 +119,7 @@ export const Tasks: React.FC = () => {
   const [showWizard, setShowWizard] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [activeCadences, setActiveCadences] = useState<CadenceTemplate[]>([]);
 
   // ── Operações do agente (Autopilot) ────────────────────────────────────────
   const {
@@ -162,8 +163,27 @@ export const Tasks: React.FC = () => {
       .filter(m => m.id));
   }, [companyId]);
 
+  const fetchActiveCadences = useCallback(async () => {
+    if (!companyId) { setActiveCadences([]); return; }
+    const { data } = await supabase
+      .from('cadence_templates')
+      .select('*, steps:cadence_steps(id)')
+      .eq('company_id', companyId)
+      .eq('status', 'active')
+      .order('updated_at', { ascending: false });
+    setActiveCadences(
+      (data ?? []).map((row) => ({
+        ...(row as unknown as CadenceTemplate),
+        step_count: Array.isArray((row as Record<string, unknown>).steps)
+          ? ((row as Record<string, unknown>).steps as unknown[]).length
+          : 0,
+      }))
+    );
+  }, [companyId]);
+
   useEffect(() => { void fetchTasks(); }, [fetchTasks]);
   useEffect(() => { void fetchTeamMembers(); }, [fetchTeamMembers]);
+  useEffect(() => { void fetchActiveCadences(); }, [fetchActiveCadences]);
 
   // Realtime para tarefas
   useEffect(() => {
@@ -322,10 +342,13 @@ export const Tasks: React.FC = () => {
               </div>
             ) : (
               <MissionControlBento
+                companyId={companyId}
                 tasks={currentTasks}
                 agentOperations={agentOperations}
                 autopilotEnabled={autopilotEnabled}
+                activeCadences={activeCadences}
                 onToggleAutopilot={() => { void toggleAutopilot(); }}
+                onOpenCadences={() => setMainTab('cadencias')}
                 onUpdateOperationMessage={updateOperationMessage}
                 onRescheduleOperation={rescheduleOperation}
                 onSnoozeOperation={snoozeOperation}

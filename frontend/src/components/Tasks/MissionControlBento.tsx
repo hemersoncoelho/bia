@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Flame, Timer, Calendar,
+  Flame, Timer,
   MessageSquare, ChevronDown, ChevronUp, User,
-  Pencil, Plus,
+  Pencil, Plus, Layers, Clock, Send,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import type { Task, TaskStatus, AgentOperation } from '../../types';
+import { supabase } from '../../lib/supabase';
+import type { Task, TaskStatus, AgentOperation, CadenceTemplate, CadenceEvent } from '../../types';
 import { CompletedSection } from './CompletedSection';
 import { AgentBadgeMini } from './AgentBadgeMini';
 import { AutopilotCard } from './AutopilotCard';
@@ -33,15 +34,6 @@ function progressPct(task: Task): number {
     return c ? Math.round(Number(c) <= 1 ? Number(c) * 100 : Number(c)) : 45;
   }
   return 0;
-}
-function formatFuture(iso?: string): string {
-  if (!iso) return '';
-  const diff = new Date(iso).getTime() - Date.now();
-  const d = Math.floor(diff / 86400000);
-  const h = Math.floor(diff / 3600000);
-  if (d > 0) return `${d}d`;
-  if (h > 0) return `${h}h`;
-  return 'Hoje';
 }
 
 function isAgentTask(task: Task): boolean {
@@ -260,50 +252,6 @@ const ProgressItem: React.FC<{ task: Task; onEditTask: () => void; onClick: () =
   );
 };
 
-// ── NextItem ──────────────────────────────────────────────────────────────────
-const NextItem: React.FC<{ task: Task; onEditTask: () => void; onClick: () => void }> = ({ task, onEditTask, onClick }) => (
-  <div
-    role="button"
-    tabIndex={0}
-    onClick={onClick}
-    onKeyDown={e => { if (e.key === 'Enter') onClick(); }}
-    className="group flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 cursor-pointer transition-all duration-200 hover:translate-x-px focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-  >
-    <div className="h-3.5 w-3.5 shrink-0 rounded-full border-2 border-stone-500" />
-    <p className="min-w-0 flex-1 truncate text-xs text-primary">{task.title}</p>
-
-    {/* Badge IA apenas para tarefas com origem de agente */}
-    {isAgentTask(task) && <AgentBadgeMini />}
-
-    {(task.contact_name ?? task.assigned_to_name) && (
-      <span className="shrink-0 text-[10px] text-stone-500">
-        {[task.contact_name?.split(' ')[0], task.assigned_to_name?.split(' ')[0]].filter(Boolean).join(' · ')}
-      </span>
-    )}
-    {task.due_at && (
-      <span className="shrink-0 font-mono text-[10px] text-stone-500">{formatFuture(task.due_at)}</span>
-    )}
-    <div className="shrink-0 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-      <button
-        type="button"
-        aria-label="Editar tarefa"
-        onClick={e => { e.stopPropagation(); onEditTask(); }}
-        className="rounded p-0.5 text-stone-500 transition-colors hover:bg-surface-hover hover:text-primary focus:outline-none"
-      >
-        <Pencil size={11} />
-      </button>
-      <button
-        type="button"
-        aria-label="Ver tarefa"
-        onClick={e => { e.stopPropagation(); onClick(); }}
-        className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-stone-500 transition-colors hover:bg-surface-hover hover:text-primary focus:outline-none"
-      >
-        Ver
-      </button>
-    </div>
-  </div>
-);
-
 // ── EmptySlot ─────────────────────────────────────────────────────────────────
 const EmptySlot: React.FC<{ label: string; onAddTask?: () => void }> = ({ label, onAddTask }) => (
   <div className="flex flex-col items-center gap-2 py-3 text-center">
@@ -320,12 +268,166 @@ const EmptySlot: React.FC<{ label: string; onAddTask?: () => void }> = ({ label,
   </div>
 );
 
+// ── CadenceBentoCard ──────────────────────────────────────────────────────────
+function formatScheduled(iso: string): string {
+  const d = new Date(iso);
+  const now = Date.now();
+  const diff = d.getTime() - now;
+  const abs = Math.abs(diff);
+  const mins = Math.floor(abs / 60000);
+  const hrs = Math.floor(abs / 3600000);
+  const days = Math.floor(abs / 86400000);
+  if (diff < 0) return 'atrasado';
+  if (mins < 60) return `em ${mins}min`;
+  if (hrs < 24) return `em ${hrs}h`;
+  if (days === 1) return 'amanhã';
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+}
+
+interface CadenceBentoCardProps {
+  companyId: string;
+  cadences: CadenceTemplate[];
+  onOpenCadences: () => void;
+  delay?: number;
+}
+
+const CadenceBentoCard: React.FC<CadenceBentoCardProps> = ({ companyId, cadences, onOpenCadences, delay = 0 }) => {
+  const [events, setEvents] = useState<CadenceEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+
+  const activeCount = cadences.filter(c => c.status === 'active').length;
+
+  const fetchEvents = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.rpc('rpc_get_cadence_events_for_company', {
+      p_company_id: companyId,
+      p_status:     ['pending', 'processing'],
+      p_limit:      10,
+      p_offset:     0,
+    });
+    const result = data as { success: boolean; events: CadenceEvent[] } | null;
+    setEvents(result?.events ?? []);
+    setLoading(false);
+  }, [companyId]);
+
+  useEffect(() => { void fetchEvents(); }, [fetchEvents]);
+
+  const visible = expanded ? events : events.slice(0, 3);
+  const hidden = events.length - 3;
+
+  return (
+    <div
+      className="bento-card-animate relative flex flex-col gap-2 overflow-hidden rounded-xl border border-cyan-500/20 bg-surface px-3 py-3"
+      style={{
+        animationDelay: `${delay}ms`,
+        background: 'radial-gradient(ellipse at top right, rgba(34,211,238,0.04), transparent 55%)',
+      }}
+    >
+      {/* Header */}
+      <div className="flex items-center gap-1.5">
+        <span className="flex h-5 w-5 items-center justify-center rounded bg-cyan-500/10">
+          <Layers size={12} className="text-cyan-400" />
+        </span>
+        <span className="text-xs font-semibold text-primary">Cadências</span>
+        {activeCount > 0 && (
+          <>
+            <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 motion-safe:animate-pulse" aria-hidden="true" />
+            <span className="ml-0.5 font-mono text-[10px] tabular-nums text-stone-500">
+              {activeCount} {activeCount === 1 ? 'ativa' : 'ativas'}
+            </span>
+          </>
+        )}
+        <button
+          type="button"
+          onClick={onOpenCadences}
+          className="ml-auto text-[10px] font-medium text-stone-500 transition-colors hover:text-cyan-400 focus:outline-none"
+        >
+          ver todas →
+        </button>
+      </div>
+
+      {/* Body */}
+      {loading ? (
+        <div className="space-y-1.5 py-1">
+          {[1, 2].map(i => (
+            <div key={i} className="h-9 animate-pulse rounded-lg border border-border bg-surface-hover/40" />
+          ))}
+        </div>
+      ) : events.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-3 text-center">
+          {activeCount === 0 ? (
+            <>
+              <p className="text-[11px] text-stone-500">Nenhuma cadência ativa.</p>
+              <button
+                type="button"
+                onClick={onOpenCadences}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-[11px] font-semibold text-text-muted transition-colors hover:border-cyan-500/25 hover:text-cyan-400 focus:outline-none"
+              >
+                <Plus size={11} />Criar cadência
+              </button>
+            </>
+          ) : (
+            <p className="text-[11px] text-stone-500">Nenhuma mensagem agendada.</p>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {visible.map((evt, i) => (
+            <div
+              key={evt.id}
+              className="task-card-animate flex items-start gap-2 rounded-lg border border-border px-2.5 py-2"
+              style={{ animationDelay: `${i * 35}ms` }}
+            >
+              <Send size={11} className="mt-0.5 shrink-0 text-cyan-400" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium text-primary">
+                  {evt.contact_name ?? 'Contato'}
+                </p>
+                <p className="truncate text-[10px] text-stone-500 leading-snug">
+                  {evt.message_body}
+                </p>
+              </div>
+              <div className="shrink-0 text-right">
+                <span className="flex items-center gap-0.5 font-mono text-[9px] text-cyan-400">
+                  <Clock size={8} />
+                  {formatScheduled(evt.scheduled_at)}
+                </span>
+                {evt.step_name && (
+                  <p className="mt-0.5 text-[9px] text-stone-600 truncate max-w-[80px]">{evt.step_name}</p>
+                )}
+              </div>
+            </div>
+          ))}
+          {hidden > 0 && (
+            <button
+              type="button"
+              onClick={() => setExpanded(e => !e)}
+              className="flex items-center justify-center gap-1 rounded-md border border-dashed border-cyan-500/20 py-1 text-[11px] font-medium text-stone-500 transition-all hover:border-solid hover:border-cyan-500/30 hover:text-cyan-400 focus:outline-none"
+            >
+              {expanded
+                ? <><ChevronUp size={11} />Mostrar menos</>
+                : <><ChevronDown size={11} />Ver mais
+                  <span className="rounded px-1 font-mono text-[10px] font-semibold bg-cyan-500/10 text-cyan-400">+{hidden}</span>
+                </>
+              }
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 export interface BentoProps {
+  companyId: string;
   tasks: Task[];
   agentOperations: AgentOperation[];
   autopilotEnabled: boolean;
+  activeCadences: CadenceTemplate[];
   onToggleAutopilot: () => void;
+  onOpenCadences: () => void;
   onUpdateOperationMessage: (id: string, message: string) => Promise<{ success: boolean; error?: string }>;
   onRescheduleOperation: (id: string, sendAt: string) => Promise<{ success: boolean; error?: string }>;
   onSnoozeOperation: (id: string) => Promise<{ success: boolean; error?: string }>;
@@ -339,10 +441,13 @@ export interface BentoProps {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 export const MissionControlBento: React.FC<BentoProps> = ({
+  companyId,
   tasks,
   agentOperations,
   autopilotEnabled,
+  activeCadences,
   onToggleAutopilot,
+  onOpenCadences,
   onUpdateOperationMessage,
   onRescheduleOperation,
   onSnoozeOperation,
@@ -358,20 +463,36 @@ export const MissionControlBento: React.FC<BentoProps> = ({
     (t.priority === 'urgent' || isOverdue(t.due_at, t.status)),
   );
   const inProgressTasks = tasks.filter(t => t.status === 'in_progress');
-  const nextTasks = tasks.filter(t =>
-    t.status === 'open' && !isOverdue(t.due_at, t.status) && t.priority !== 'urgent',
-  );
 
   return (
     <div className="space-y-2.5">
       <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
 
-        {/* Card 1 — Agora */}
+        {/* Row 1 — Autopilot | Cadências */}
+        <AutopilotCard
+          operations={agentOperations}
+          autopilotEnabled={autopilotEnabled}
+          onToggleAutopilot={onToggleAutopilot}
+          onUpdateMessage={onUpdateOperationMessage}
+          onReschedule={onRescheduleOperation}
+          onSnooze={onSnoozeOperation}
+          onCancel={onCancelOperation}
+          delay={0}
+        />
+
+        <CadenceBentoCard
+          companyId={companyId}
+          cadences={activeCadences}
+          onOpenCadences={onOpenCadences}
+          delay={60}
+        />
+
+        {/* Row 2 — Agora | Em andamento */}
         <BentoCard
           title="Agora · precisa de você"
           icon={<Flame size={12} className="text-rose-400" />}
           count={nowTasks.length}
-          delay={0}
+          delay={120}
           accentClass="bg-rose-500/10"
           borderClass="border-rose-500/20"
           glowStyle={{ background: 'radial-gradient(ellipse at top left, rgba(244,63,94,0.05), transparent 55%)' }}
@@ -393,24 +514,11 @@ export const MissionControlBento: React.FC<BentoProps> = ({
             )}
         </BentoCard>
 
-        {/* Card 2 — Autopilot */}
-        <AutopilotCard
-          operations={agentOperations}
-          autopilotEnabled={autopilotEnabled}
-          onToggleAutopilot={onToggleAutopilot}
-          onUpdateMessage={onUpdateOperationMessage}
-          onReschedule={onRescheduleOperation}
-          onSnooze={onSnoozeOperation}
-          onCancel={onCancelOperation}
-          delay={60}
-        />
-
-        {/* Card 3 — Em andamento */}
         <BentoCard
           title="Em andamento"
           icon={<Timer size={12} className="text-amber-400" />}
           count={inProgressTasks.length}
-          delay={120}
+          delay={180}
           accentClass="bg-amber-500/10"
         >
           {inProgressTasks.length === 0
@@ -419,29 +527,6 @@ export const MissionControlBento: React.FC<BentoProps> = ({
               <ExpandableList items={inProgressTasks} initial={2} accentColor="#fbbf24"
                 renderItem={t => (
                   <ProgressItem
-                    task={t}
-                    onEditTask={() => onEditTask(t)}
-                    onClick={() => onTaskClick(t)}
-                  />
-                )}
-              />
-            )}
-        </BentoCard>
-
-        {/* Card 4 — Próximas */}
-        <BentoCard
-          title="Próximas"
-          icon={<Calendar size={12} className="text-stone-400" />}
-          count={nextTasks.length}
-          delay={180}
-          accentClass="bg-stone-500/10"
-        >
-          {nextTasks.length === 0
-            ? <EmptySlot label="Nenhuma tarefa agendada" onAddTask={onAddTask} />
-            : (
-              <ExpandableList items={nextTasks} initial={2} accentColor="#22d3ee"
-                renderItem={t => (
-                  <NextItem
                     task={t}
                     onEditTask={() => onEditTask(t)}
                     onClick={() => onTaskClick(t)}

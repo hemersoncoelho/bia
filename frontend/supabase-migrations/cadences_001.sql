@@ -1,4 +1,4 @@
--- =============================================================================
+-- ====a=========================================================================
 -- Cadências Estáticas — Phase 1
 -- Tabelas: message_templates, cadence_templates, cadence_steps
 -- Aplicar via Supabase SQL Editor
@@ -124,56 +124,86 @@ ALTER TABLE public.cadence_templates  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cadence_steps      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.message_templates  ENABLE ROW LEVEL SECURITY;
 
+-- Helper: verifica se o usuário é platform_admin ou system_admin
+-- (usado nas políticas para permitir acesso cross-tenant em modo suporte)
+
 -- cadence_templates
+DROP POLICY IF EXISTS cadence_templates_select ON public.cadence_templates;
+DROP POLICY IF EXISTS cadence_templates_insert ON public.cadence_templates;
+DROP POLICY IF EXISTS cadence_templates_update ON public.cadence_templates;
+DROP POLICY IF EXISTS cadence_templates_delete ON public.cadence_templates;
+
 CREATE POLICY cadence_templates_select ON public.cadence_templates
   FOR SELECT USING (
     company_id IN (SELECT company_id FROM public.user_companies WHERE user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND system_role::text IN ('platform_admin','system_admin'))
   );
 CREATE POLICY cadence_templates_insert ON public.cadence_templates
   FOR INSERT WITH CHECK (
     company_id IN (SELECT company_id FROM public.user_companies WHERE user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND system_role::text IN ('platform_admin','system_admin'))
   );
 CREATE POLICY cadence_templates_update ON public.cadence_templates
   FOR UPDATE USING (
     company_id IN (SELECT company_id FROM public.user_companies WHERE user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND system_role::text IN ('platform_admin','system_admin'))
   );
 CREATE POLICY cadence_templates_delete ON public.cadence_templates
   FOR DELETE USING (
     company_id IN (SELECT company_id FROM public.user_companies WHERE user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND system_role::text IN ('platform_admin','system_admin'))
   );
 
 -- cadence_steps
+DROP POLICY IF EXISTS cadence_steps_select ON public.cadence_steps;
+DROP POLICY IF EXISTS cadence_steps_insert ON public.cadence_steps;
+DROP POLICY IF EXISTS cadence_steps_update ON public.cadence_steps;
+DROP POLICY IF EXISTS cadence_steps_delete ON public.cadence_steps;
+
 CREATE POLICY cadence_steps_select ON public.cadence_steps
   FOR SELECT USING (
     company_id IN (SELECT company_id FROM public.user_companies WHERE user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND system_role::text IN ('platform_admin','system_admin'))
   );
 CREATE POLICY cadence_steps_insert ON public.cadence_steps
   FOR INSERT WITH CHECK (
     company_id IN (SELECT company_id FROM public.user_companies WHERE user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND system_role::text IN ('platform_admin','system_admin'))
   );
 CREATE POLICY cadence_steps_update ON public.cadence_steps
   FOR UPDATE USING (
     company_id IN (SELECT company_id FROM public.user_companies WHERE user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND system_role::text IN ('platform_admin','system_admin'))
   );
 CREATE POLICY cadence_steps_delete ON public.cadence_steps
   FOR DELETE USING (
     company_id IN (SELECT company_id FROM public.user_companies WHERE user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND system_role::text IN ('platform_admin','system_admin'))
   );
 
 -- message_templates
+DROP POLICY IF EXISTS message_templates_select ON public.message_templates;
+DROP POLICY IF EXISTS message_templates_insert ON public.message_templates;
+DROP POLICY IF EXISTS message_templates_update ON public.message_templates;
+DROP POLICY IF EXISTS message_templates_delete ON public.message_templates;
+
 CREATE POLICY message_templates_select ON public.message_templates
   FOR SELECT USING (
     company_id IN (SELECT company_id FROM public.user_companies WHERE user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND system_role::text IN ('platform_admin','system_admin'))
   );
 CREATE POLICY message_templates_insert ON public.message_templates
   FOR INSERT WITH CHECK (
     company_id IN (SELECT company_id FROM public.user_companies WHERE user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND system_role::text IN ('platform_admin','system_admin'))
   );
 CREATE POLICY message_templates_update ON public.message_templates
   FOR UPDATE USING (
     company_id IN (SELECT company_id FROM public.user_companies WHERE user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND system_role::text IN ('platform_admin','system_admin'))
   );
 CREATE POLICY message_templates_delete ON public.message_templates
   FOR DELETE USING (
     company_id IN (SELECT company_id FROM public.user_companies WHERE user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.user_profiles WHERE id = auth.uid() AND system_role::text IN ('platform_admin','system_admin'))
   );

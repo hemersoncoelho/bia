@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Plus, Zap, Clock, ListChecks, MoreHorizontal, Archive,
   Pause, Play, Pencil, Layers, Copy, Sparkles, MessageSquare, CheckCircle2,
+  Send, AlertCircle, Loader2, Ban, RefreshCw,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { cn } from '../../lib/utils';
-import type { CadenceTemplate, CadenceStatus, CadenceTriggerType } from '../../types';
+import type { CadenceTemplate, CadenceStatus, CadenceTriggerType, CadenceEvent, CadenceEventStatus } from '../../types';
 
 const STATUS_LABELS: Record<CadenceStatus, string> = {
   draft: 'Rascunho', active: 'Ativa', paused: 'Pausada', archived: 'Arquivada',
@@ -21,6 +22,7 @@ const TRIGGER_LABELS: Record<CadenceTriggerType, string> = {
   appointment_rescheduled: 'Consulta remarcada',
   appointment_cancelled: 'Consulta cancelada',
   no_response: 'Lead sem resposta',
+  quote_sent: 'Orçamento enviado',
   manual: 'Manual',
 };
 
@@ -75,6 +77,170 @@ function TimelinePreview({ triggerType, stepCount }: { triggerType: CadenceTrigg
     </div>
   );
 }
+
+// ── Event status config ───────────────────────────────────────────────────────
+const EVENT_STATUS_CONFIG: Record<CadenceEventStatus, { label: string; badge: string; icon: React.ReactNode }> = {
+  pending:    { label: 'Aguardando', badge: 'text-amber-400 bg-amber-400/10 border-amber-500/25', icon: <Clock size={11} className="text-amber-400" /> },
+  processing: { label: 'Processando', badge: 'text-blue-400 bg-blue-400/10 border-blue-500/25', icon: <Loader2 size={11} className="text-blue-400 animate-spin" /> },
+  sent:       { label: 'Enviado', badge: 'text-emerald-400 bg-emerald-400/10 border-emerald-500/25', icon: <Send size={11} className="text-emerald-400" /> },
+  failed:     { label: 'Falhou', badge: 'text-red-400 bg-red-400/10 border-red-500/25', icon: <AlertCircle size={11} className="text-red-400" /> },
+  canceled:   { label: 'Cancelado', badge: 'text-stone-500 bg-stone-500/10 border-stone-600/25', icon: <Ban size={11} className="text-stone-500" /> },
+  skipped:    { label: 'Ignorado', badge: 'text-stone-500 bg-stone-500/10 border-stone-600/25', icon: <Ban size={11} className="text-stone-500" /> },
+};
+
+type EventsFilter = 'upcoming' | 'sent' | 'failed';
+const EVENTS_FILTER_LABELS: Record<EventsFilter, string> = {
+  upcoming: 'Próximos',
+  sent:     'Enviados',
+  failed:   'Com falha',
+};
+const EVENTS_FILTER_STATUSES: Record<EventsFilter, CadenceEventStatus[]> = {
+  upcoming: ['pending', 'processing'],
+  sent:     ['sent'],
+  failed:   ['failed'],
+};
+
+// ── CadenceEventsPanel ────────────────────────────────────────────────────────
+const CadenceEventsPanel: React.FC<{ companyId: string }> = ({ companyId }) => {
+  const [filter, setFilter] = useState<EventsFilter>('upcoming');
+  const [events, setEvents] = useState<CadenceEvent[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchEvents = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const statuses = EVENTS_FILTER_STATUSES[filter];
+    const { data, error: rpcErr } = await supabase.rpc('rpc_get_cadence_events_for_company', {
+      p_company_id: companyId,
+      p_status:     statuses,
+      p_limit:      30,
+      p_offset:     0,
+    });
+
+    if (rpcErr) {
+      setError('Erro ao carregar eventos. Verifique as permissões.');
+      setEvents([]);
+    } else {
+      const result = data as { success: boolean; events: CadenceEvent[] } | null;
+      setEvents(result?.events ?? []);
+    }
+    setLoading(false);
+  }, [companyId, filter]);
+
+  useEffect(() => { void fetchEvents(); }, [fetchEvents]);
+
+  return (
+    <div className="mt-8">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-primary">Eventos de cadência</h3>
+        <button
+          type="button"
+          onClick={() => void fetchEvents()}
+          className="rounded p-1 text-stone-500 hover:text-primary transition-colors"
+          aria-label="Recarregar eventos"
+        >
+          <RefreshCw size={13} />
+        </button>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="mb-3 flex gap-1">
+        {(Object.keys(EVENTS_FILTER_LABELS) as EventsFilter[]).map(k => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setFilter(k)}
+            className={cn(
+              'rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none',
+              filter === k
+                ? 'bg-surface-hover text-primary'
+                : 'text-text-muted hover:text-primary',
+            )}
+          >
+            {EVENTS_FILTER_LABELS[k]}
+          </button>
+        ))}
+      </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-xs text-red-400">
+          {error}
+        </div>
+      )}
+
+      {loading && (
+        <div className="space-y-2">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="h-14 animate-pulse rounded-lg border border-border bg-surface" />
+          ))}
+        </div>
+      )}
+
+      {!loading && !error && events.length === 0 && (
+        <div className="rounded-lg border border-border bg-surface px-4 py-6 text-center text-xs text-stone-500">
+          Nenhum evento {EVENTS_FILTER_LABELS[filter].toLowerCase()} no momento.
+        </div>
+      )}
+
+      {!loading && !error && events.length > 0 && (
+        <div className="space-y-1.5">
+          {events.map(evt => {
+            const cfg = EVENT_STATUS_CONFIG[evt.status];
+            return (
+              <div
+                key={evt.id}
+                className="flex items-start gap-3 rounded-lg border border-border bg-surface px-3 py-2.5 transition-colors hover:bg-surface-hover"
+              >
+                {/* Status icon */}
+                <span className="mt-0.5 shrink-0">{cfg.icon}</span>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span className="truncate text-xs font-medium text-primary">
+                      {evt.contact_name ?? 'Contato'}
+                    </span>
+                    {evt.cadence_name && (
+                      <span className="text-[10px] text-stone-500">· {evt.cadence_name}</span>
+                    )}
+                    {evt.step_name && (
+                      <span className="text-[10px] text-stone-600">— {evt.step_name}</span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 flex items-center gap-2 text-[10px] text-stone-500">
+                    <Clock size={9} />
+                    <span>
+                      {new Date(evt.scheduled_at).toLocaleString('pt-BR', {
+                        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+                      })}
+                    </span>
+                    {evt.recipient_phone && (
+                      <span className="font-mono">{evt.recipient_phone}</span>
+                    )}
+                    {evt.attempts > 0 && (
+                      <span className="text-stone-600">{evt.attempts}× tentativa{evt.attempts > 1 ? 's' : ''}</span>
+                    )}
+                  </div>
+                  {evt.last_error && evt.status === 'failed' && (
+                    <p className="mt-0.5 truncate text-[10px] text-red-400">{evt.last_error}</p>
+                  )}
+                </div>
+
+                {/* Status badge */}
+                <span className={cn(
+                  'shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide',
+                  cfg.badge,
+                )}>
+                  {cfg.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface Props {
@@ -179,6 +345,7 @@ export const CadenceList: React.FC<Props> = ({ companyId, onNewCadence, onEditCa
   // ── Empty state ──
   if (cadences.length === 0) {
     return (
+      <div className="max-w-4xl">
       <div className="card-animate overflow-hidden rounded-2xl border border-border bg-surface">
         {/* Hero split */}
         <div className="grid grid-cols-1 gap-0 lg:grid-cols-2">
@@ -273,12 +440,15 @@ export const CadenceList: React.FC<Props> = ({ companyId, onNewCadence, onEditCa
           </div>
         </div>
       </div>
+      <CadenceEventsPanel companyId={companyId} />
+      </div>
     );
   }
 
   // ── List ──
   return (
-    <div className="max-w-4xl space-y-3">
+    <div className="max-w-4xl">
+      <div className="space-y-3">
       {cadences.map((cadence, index) => (
         <div
           key={cadence.id}
@@ -363,6 +533,8 @@ export const CadenceList: React.FC<Props> = ({ companyId, onNewCadence, onEditCa
           </div>
         </div>
       ))}
+      </div>
+      <CadenceEventsPanel companyId={companyId} />
     </div>
   );
 };

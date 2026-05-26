@@ -188,6 +188,7 @@ export type CadenceTriggerType =
   | 'appointment_rescheduled'
   | 'appointment_cancelled'
   | 'no_response'
+  | 'quote_sent'
   | 'manual';
 
 export type CadenceCategory =
@@ -250,6 +251,54 @@ export interface MessageTemplate {
   created_by?: string;
   created_at: string;
   updated_at: string;
+}
+
+export type CadenceRunStatus = 'active' | 'completed' | 'canceled' | 'superseded';
+
+export interface CadenceRun {
+  id: string;
+  company_id: string;
+  cadence_id: string;
+  appointment_id: string;
+  contact_id?: string;
+  status: CadenceRunStatus;
+  source_snapshot?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CadenceEventStatus = 'pending' | 'processing' | 'sent' | 'failed' | 'canceled' | 'skipped';
+
+export interface CadenceEvent {
+  id: string;
+  company_id: string;
+  cadence_run_id: string;
+  cadence_id: string;
+  cadence_step_id: string;
+  appointment_id: string;
+  contact_id?: string;
+  channel: string;
+  recipient_phone?: string;
+  scheduled_at: string;
+  message_body: string;
+  payload?: Record<string, unknown>;
+  status: CadenceEventStatus;
+  attempts: number;
+  max_attempts: number;
+  locked_at?: string;
+  locked_until?: string;
+  locked_by?: string;
+  sent_at?: string;
+  failed_at?: string;
+  last_error?: string;
+  external_message_id?: string;
+  idempotency_key: string;
+  created_at: string;
+  updated_at: string;
+  // Campos joined pelo rpc_get_cadence_events_for_company
+  cadence_name?: string;
+  step_name?: string;
+  contact_name?: string;
 }
 
 // ===== NOTES =====

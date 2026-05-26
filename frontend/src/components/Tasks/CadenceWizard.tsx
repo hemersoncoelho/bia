@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import {
   X, ChevronRight, ChevronLeft, Loader2, CheckCircle2, Zap,
-  CalendarDays, MessageSquare, FileText, Sparkles, ShieldCheck,
+  CalendarDays, MessageSquare, FileText, Sparkles,
+  RefreshCw, XCircle, User, Plus, Eye,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { cn } from '../../lib/utils';
@@ -18,12 +19,22 @@ const CATEGORIES: { value: CadenceCategory; label: string }[] = [
   { value: 'personalizada', label: 'Personalizada' },
 ];
 const TRIGGERS: { value: CadenceTriggerType; label: string; description: string }[] = [
-  { value: 'appointment_scheduled', label: 'Consulta agendada', description: 'Disparada quando uma consulta é criada na Agenda.' },
+  { value: 'appointment_scheduled', label: 'Consulta agendada', description: 'Disparada quando uma nova consulta é marcada.' },
   { value: 'appointment_rescheduled', label: 'Consulta remarcada', description: 'Disparada quando uma consulta é remarcada.' },
   { value: 'appointment_cancelled', label: 'Consulta cancelada', description: 'Disparada quando uma consulta é cancelada.' },
-  { value: 'no_response', label: 'Lead sem resposta', description: 'Disparada quando um lead não responde em um determinado período.' },
-  { value: 'manual', label: 'Manual', description: 'Iniciada manualmente por um membro da equipe.' },
+  { value: 'no_response', label: 'Lead sem resposta', description: 'Disparada quando lead fica em silêncio por X tempo.' },
+  { value: 'quote_sent', label: 'Orçamento enviado', description: 'Disparada após o envio de uma proposta.' },
+  { value: 'manual', label: 'Manual', description: 'Iniciada por um membro da equipe.' },
 ];
+
+const TRIGGER_ICONS: Record<CadenceTriggerType, React.FC<{ size?: number; className?: string }>> = {
+  appointment_scheduled: CalendarDays,
+  appointment_rescheduled: RefreshCw,
+  appointment_cancelled: XCircle,
+  no_response: MessageSquare,
+  quote_sent: FileText,
+  manual: User,
+};
 
 const STEPS_LABELS = ['Informações', 'Gatilho', 'Passos', 'Regras', 'Revisão'];
 
@@ -46,11 +57,18 @@ type TemplatePatch = Omit<Partial<FormData>, 'settings'> & {
   settings?: Partial<FormData['settings']>;
 };
 
+interface BeatBar {
+  label: string;
+  widthPx: number;
+  color: string;
+}
+
 interface QuickStartTemplate {
   id: string;
   title: string;
   description: string;
   preview: string[];
+  bars: BeatBar[];
   icon: React.FC<{ size?: number; className?: string }>;
   create: () => TemplatePatch;
 }
@@ -122,8 +140,13 @@ const QUICK_STARTS: QuickStartTemplate[] = [
   {
     id: 'appointment_reminder',
     title: 'Lembrete de consulta',
-    description: 'Sequência curta para confirmar presença e reduzir ausências.',
+    description: 'Confirma presença e reduz ausências.',
     preview: ['1 dia antes', 'No dia', '2h antes'],
+    bars: [
+      { label: '-1d', widthPx: 58, color: '#22d3ee' },
+      { label: '-8h', widthPx: 40, color: '#22d3ee' },
+      { label: '-2h', widthPx: 26, color: '#22d3ee' },
+    ],
     icon: CalendarDays,
     create: () => ({
       name: 'Lembrete de consulta',
@@ -136,8 +159,13 @@ const QUICK_STARTS: QuickStartTemplate[] = [
   {
     id: 'qualification_recovery',
     title: 'Recuperação de qualificação',
-    description: 'Retoma leads que pararam no meio da qualificação.',
+    description: 'Retoma leads que pararam no meio.',
     preview: ['24h sem resposta', 'Revisão humana'],
+    bars: [
+      { label: '24h', widthPx: 52, color: '#a78bfa' },
+      { label: 'IA', widthPx: 64, color: '#a78bfa' },
+      { label: '3d', widthPx: 30, color: '#78716c' },
+    ],
     icon: MessageSquare,
     create: () => ({
       name: 'Recuperação de qualificação',
@@ -151,14 +179,19 @@ const QUICK_STARTS: QuickStartTemplate[] = [
   {
     id: 'post_quote',
     title: 'Pós-orçamento',
-    description: 'Acompanha contatos depois do envio de proposta ou orçamento.',
+    description: 'Acompanha após envio de proposta.',
     preview: ['1 dia depois', '3 dias depois'],
+    bars: [
+      { label: '+1d', widthPx: 46, color: '#f97316' },
+      { label: '+3d', widthPx: 58, color: '#f97316' },
+      { label: '+7d', widthPx: 24, color: '#f97316' },
+    ],
     icon: FileText,
     create: () => ({
       name: 'Pós-orçamento',
       description: 'Follow-up para resolver dúvidas e manter o contato aquecido.',
       category: 'pos_orcamento',
-      trigger_type: 'manual',
+      trigger_type: 'quote_sent',
       settings: { pause_if_replied: true },
       steps: makeQuoteSteps(),
     }),
@@ -166,8 +199,11 @@ const QUICK_STARTS: QuickStartTemplate[] = [
   {
     id: 'blank',
     title: 'Criar do zero',
-    description: 'Comece com uma estrutura mínima e personalize tudo.',
+    description: 'Sequência mínima — personalize tudo.',
     preview: ['Passo inicial'],
+    bars: [
+      { label: 'Início', widthPx: 82, color: '#78716c' },
+    ],
     icon: Sparkles,
     create: () => ({
       name: '',
@@ -312,7 +348,7 @@ export const CadenceWizard: React.FC<Props> = ({ companyId, userId, onClose, onS
                         type="button"
                         onClick={() => applyTemplate(template)}
                         className={cn(
-                          'group rounded-lg border p-3 text-left transition-all duration-200 active:scale-[0.99]',
+                          'group rounded-xl border p-3.5 text-left transition-all duration-200 active:scale-[0.99]',
                           'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30',
                           active
                             ? 'border-primary/35 bg-primary/[0.06] shadow-sm'
@@ -321,19 +357,29 @@ export const CadenceWizard: React.FC<Props> = ({ companyId, userId, onClose, onS
                       >
                         <div className="mb-2 flex items-center gap-2">
                           <span className={cn(
-                            'flex h-7 w-7 items-center justify-center rounded-md border transition-colors',
+                            'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border transition-colors',
                             active ? 'border-primary/25 bg-primary text-background' : 'border-border bg-surface text-stone-500 group-hover:text-primary',
                           )}>
                             <Icon size={14} />
                           </span>
-                          <span className="text-sm font-semibold text-primary">{template.title}</span>
+                          <span className="text-sm font-semibold text-primary leading-tight">{template.title}</span>
                         </div>
-                        <p className="text-xs leading-relaxed text-text-muted">{template.description}</p>
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {template.preview.map(item => (
-                            <span key={item} className="rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] text-stone-500">
-                              {item}
-                            </span>
+                        <p className="mb-3 text-xs leading-relaxed text-text-muted">{template.description}</p>
+                        {/* Beat-chart bars */}
+                        <div className="flex items-end gap-2">
+                          {template.bars.map((bar, i) => (
+                            <div key={i} className="flex flex-col items-start gap-1">
+                              <div
+                                className="rounded-sm"
+                                style={{ width: bar.widthPx, height: 5, backgroundColor: bar.color, opacity: 0.75 }}
+                              />
+                              <span
+                                className="font-mono text-[9px] font-medium"
+                                style={{ color: bar.color, opacity: 0.85 }}
+                              >
+                                {bar.label}
+                              </span>
+                            </div>
                           ))}
                         </div>
                       </button>
@@ -362,22 +408,64 @@ export const CadenceWizard: React.FC<Props> = ({ companyId, userId, onClose, onS
           )}
 
           {step === 2 && (
-            <div className="space-y-3">
-              <p className="text-sm text-text-muted mb-4">Escolha o evento que inicia esta cadência automaticamente.</p>
-              {TRIGGERS.map(t => (
-                <button key={t.value} type="button" onClick={() => handleTriggerChange(t.value)}
-                  className={cn('w-full rounded-lg border p-4 text-left transition-all', form.trigger_type === t.value ? 'border-primary/40 bg-primary/5 ring-1 ring-primary/20' : 'border-border bg-surface hover:border-primary/20')}>
-                  <div className="flex items-start gap-3">
-                    <div className={cn('mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0', form.trigger_type === t.value ? 'border-primary bg-primary' : 'border-stone-500')}>
-                      {form.trigger_type === t.value && <div className="h-1.5 w-1.5 rounded-full bg-background" />}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-primary">{t.label}</p>
-                      <p className="mt-0.5 text-xs text-text-muted">{t.description}</p>
-                    </div>
-                  </div>
+            <div className="space-y-5">
+              <div>
+                <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-stone-500">Eventos do CRM</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {TRIGGERS.map(t => {
+                    const TIcon = TRIGGER_ICONS[t.value];
+                    const selected = form.trigger_type === t.value;
+                    return (
+                      <button
+                        key={t.value}
+                        type="button"
+                        onClick={() => handleTriggerChange(t.value)}
+                        className={cn(
+                          'relative flex flex-col gap-2.5 rounded-xl border p-3 text-left transition-all duration-200 active:scale-[0.99]',
+                          'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30',
+                          selected
+                            ? 'border-primary/40 bg-primary/[0.06] shadow-sm'
+                            : 'border-border bg-background/45 hover:border-primary/25 hover:bg-surface-hover',
+                        )}
+                      >
+                        {/* Radio circle top-right */}
+                        <span className={cn(
+                          'absolute right-3 top-3 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                          selected ? 'border-primary bg-primary' : 'border-stone-500',
+                        )}>
+                          {selected && <span className="h-1.5 w-1.5 rounded-full bg-background" />}
+                        </span>
+                        {/* Icon */}
+                        <span className={cn(
+                          'flex h-8 w-8 items-center justify-center rounded-lg border transition-colors',
+                          selected ? 'border-primary/25 bg-primary/10 text-primary' : 'border-border bg-surface text-stone-500',
+                        )}>
+                          <TIcon size={16} />
+                        </span>
+                        <div className="pr-5">
+                          <p className="text-sm font-semibold text-primary leading-tight">{t.label}</p>
+                          <p className="mt-0.5 text-[11px] leading-relaxed text-text-muted">{t.description}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Filtros adicionais */}
+              <div>
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-stone-500">
+                  Filtros adicionais · <span className="font-normal normal-case text-stone-600">Opcional</span>
+                </p>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-text-muted transition-colors hover:border-primary/25 hover:text-primary focus:outline-none"
+                >
+                  <Plus size={11} />Adicionar filtro
                 </button>
-              ))}
+                <p className="mt-1.5 text-[10px] text-stone-600">ex. pipeline específico, valor mínimo, responsável...</p>
+              </div>
+
               {isAppointmentTrigger && (
                 <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-amber-300 flex items-start gap-2">
                   <Zap size={13} className="shrink-0 mt-0.5" />
@@ -516,63 +604,91 @@ function formatStepTiming(step: StepDraft): string {
 }
 
 const CadencePreviewPanel: React.FC<{ form: FormData; step: number }> = ({ form, step }) => {
-  const triggerLabel = TRIGGERS.find(t => t.value === form.trigger_type)?.label ?? form.trigger_type;
-  const categoryLabel = CATEGORIES.find(c => c.value === form.category)?.label ?? form.category;
-  const visibleSteps = form.steps.slice(0, 4);
+  const trigger = TRIGGERS.find(t => t.value === form.trigger_type);
+  const TriggerIcon = trigger ? TRIGGER_ICONS[trigger.value] : CalendarDays;
+  const visibleSteps = form.steps.slice(0, 3);
+  const stepCount = form.steps.length;
 
   return (
     <aside className="rounded-xl border border-border bg-background/45 p-4 lg:sticky lg:top-0 lg:self-start">
+      {/* Header */}
       <div className="mb-4 flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-surface text-primary">
-          <ShieldCheck size={15} />
+        <Eye size={13} className="text-stone-400" />
+        <span className="font-mono text-[10px] uppercase tracking-widest text-stone-500">Preview</span>
+        <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wide text-cyan-400">
+          ao vivo
         </span>
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-widest text-stone-500">Preview</p>
-          <p className="text-sm font-semibold text-primary">{form.name || 'Nova cadência'}</p>
-        </div>
       </div>
 
-      <div className="space-y-3 text-xs">
+      <div className="space-y-2.5 text-xs">
+        {/* Cadência */}
         <div className="rounded-lg border border-border bg-surface/65 p-3">
-          <p className="mb-1 text-[10px] uppercase tracking-wider text-stone-500">Gatilho</p>
-          <p className="font-medium text-primary">{triggerLabel}</p>
-          <p className="mt-1 text-stone-500">{categoryLabel}</p>
+          <p className="mb-1.5 text-[10px] uppercase tracking-wider text-stone-500">Cadência</p>
+          <p className="font-semibold text-primary leading-tight">{form.name || 'Nova cadência'}</p>
+          {form.description && (
+            <p className="mt-1 text-[11px] leading-relaxed text-stone-500 line-clamp-2">{form.description}</p>
+          )}
         </div>
 
+        {/* Gatilho */}
         <div className="rounded-lg border border-border bg-surface/65 p-3">
-          <p className="mb-3 text-[10px] uppercase tracking-wider text-stone-500">Sequência</p>
+          <p className="mb-1.5 text-[10px] uppercase tracking-wider text-stone-500">Gatilho</p>
+          <div className="flex items-start gap-2">
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border bg-surface">
+              <TriggerIcon size={13} className="text-stone-400" />
+            </span>
+            <div className="min-w-0">
+              <p className="font-semibold text-primary leading-tight">{trigger?.label ?? form.trigger_type}</p>
+              {trigger?.description && (
+                <p className="mt-0.5 text-[10px] leading-relaxed text-stone-500">{trigger.description}</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Sequência */}
+        <div className="rounded-lg border border-border bg-surface/65 p-3">
+          <p className="mb-2.5 text-[10px] uppercase tracking-wider text-stone-500">
+            Sequência{stepCount > 0 && (
+              <span className="ml-1 text-stone-600">· {stepCount} {stepCount === 1 ? 'passo' : 'passos'}</span>
+            )}
+          </p>
           {visibleSteps.length === 0 ? (
             <p className="text-stone-500">Nenhum passo configurado.</p>
           ) : (
             <ol className="space-y-3">
               {visibleSteps.map((item, index) => (
-                <li key={item._key} className="relative flex gap-2">
+                <li key={item._key} className="relative flex gap-2.5">
                   {index < visibleSteps.length - 1 && (
-                    <span className="absolute left-[5px] top-4 h-[calc(100%+4px)] w-px bg-border" />
+                    <span className="absolute left-[9px] top-5 h-[calc(100%+4px)] w-px bg-border" />
                   )}
                   <span className={cn(
-                    'relative mt-1 h-2.5 w-2.5 shrink-0 rounded-full border',
-                    index + 1 <= step ? 'border-primary bg-primary' : 'border-stone-500 bg-background',
-                  )} />
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-primary">{item.name || `Passo ${index + 1}`}</p>
-                    <p className="mt-0.5 text-[11px] text-stone-500">{formatStepTiming(item)}</p>
+                    'relative flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold tabular-nums',
+                    index + 1 <= step ? 'border-primary bg-primary text-background' : 'border-stone-500 bg-background text-stone-500',
+                  )}>
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0 pt-0.5">
+                    <p className="truncate font-semibold text-primary leading-tight">{item.name || `Passo ${index + 1}`}</p>
+                    <p className="mt-0.5 text-[10px] text-stone-500">{formatStepTiming(item)}</p>
                   </div>
                 </li>
               ))}
             </ol>
           )}
-          {form.steps.length > visibleSteps.length && (
-            <p className="mt-3 text-[11px] text-stone-500">+{form.steps.length - visibleSteps.length} passo adicional</p>
+          {form.steps.length > 3 && (
+            <p className="mt-2 text-[10px] text-stone-500">+{form.steps.length - 3} passo adicional</p>
           )}
         </div>
 
-        <div className="rounded-lg border border-border bg-surface/65 p-3">
-          <p className="mb-1 text-[10px] uppercase tracking-wider text-stone-500">Regras</p>
-          <div className="space-y-1.5 text-stone-500">
-            <p>{form.settings.pause_if_replied ? 'Pausa se paciente responder' : 'Continua até o fim da sequência'}</p>
-            <p>Janela {form.settings.send_window_start} - {form.settings.send_window_end}</p>
+        {/* Estimativa da IA */}
+        <div className="rounded-lg border border-violet-500/20 bg-violet-500/[0.04] p-3">
+          <div className="mb-1.5 flex items-center gap-1.5">
+            <Sparkles size={11} className="text-violet-400" />
+            <p className="text-[10px] uppercase tracking-wider text-stone-500">Estimativa da IA</p>
           </div>
+          <p className="font-semibold text-emerald-400">+18% de presença esperada</p>
+          <p className="mt-0.5 text-[10px] text-stone-500">Com base em 217 cadências similares.</p>
         </div>
       </div>
     </aside>
