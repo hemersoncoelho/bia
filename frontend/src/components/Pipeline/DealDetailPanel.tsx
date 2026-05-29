@@ -48,6 +48,14 @@ const STATUS_CONFIG: Record<DealStatus, { label: string; dot: string; badge: str
   },
 };
 
+type StageHistoryItem = {
+  id: string;
+  old_stage_id: string | null;
+  new_stage_id: string | null;
+  changed_by_user_id: string | null;
+  changed_at: string;
+};
+
 interface DealDetailPanelProps {
   deal: Deal | null;
   stages: PipelineStage[];
@@ -102,6 +110,10 @@ export const DealDetailPanel: React.FC<DealDetailPanelProps> = ({
   const [convOptions, setConvOptions] = useState<ConvOption[]>([]);
   const [loadingConvs, setLoadingConvs] = useState(false);
   const [linkingConv, setLinkingConv] = useState(false);
+
+  // ── Stage history ──
+  const [stageHistory, setStageHistory] = useState<StageHistoryItem[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     isEditingRef.current = isEditingName || isEditingValue;
@@ -163,6 +175,25 @@ export const DealDetailPanel: React.FC<DealDetailPanelProps> = ({
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose, confirmClose, showLinkConv]);
+
+  // Busca histórico de movimentação do deal no pipeline
+  useEffect(() => {
+    if (!deal?.id) return;
+    let cancelled = false;
+    setLoadingHistory(true);
+    supabase
+      .from('deal_stage_history')
+      .select('id, old_stage_id, new_stage_id, changed_by_user_id, changed_at')
+      .eq('deal_id', deal.id)
+      .order('changed_at', { ascending: true })
+      .then(({ data }) => {
+        if (!cancelled) {
+          setStageHistory((data as StageHistoryItem[]) ?? []);
+          setLoadingHistory(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [deal?.id]);
 
   if (!deal) return null;
 
@@ -914,6 +945,7 @@ export const DealDetailPanel: React.FC<DealDetailPanelProps> = ({
             <div className="relative space-y-4 pl-4">
               <div className="absolute left-1.5 top-1 bottom-1 w-px bg-border" />
 
+              {/* Deal criado */}
               <div className="relative flex items-start gap-3">
                 <div className="absolute -left-[11px] w-2 h-2 rounded-full bg-border border border-border mt-1 shrink-0" />
                 <div>
@@ -925,20 +957,52 @@ export const DealDetailPanel: React.FC<DealDetailPanelProps> = ({
                 </div>
               </div>
 
-              {deal.updated_at && deal.updated_at !== deal.created_at && !deal.closed_at && (
+              {/* Movimentações de estágio */}
+              {loadingHistory && (
                 <div className="relative flex items-start gap-3">
-                  <div className="absolute -left-[11px] w-2 h-2 rounded-full bg-stone-700 border border-stone-600 mt-1 shrink-0" />
-                  <div>
-                    <p className="text-xs font-medium text-text-main">Última atualização</p>
-                    <div className="flex items-center gap-1.5 mt-1 text-[11px] text-stone-600">
-                      <Clock size={10} />
-                      <span>{formatDate(deal.updated_at)}</span>
-                    </div>
-                  </div>
+                  <div className="absolute -left-[11px] w-2 h-2 rounded-full bg-stone-800 mt-1 shrink-0 animate-pulse" />
+                  <p className="text-[11px] text-stone-700">Carregando histórico...</p>
                 </div>
               )}
+              {!loadingHistory && stageHistory.map((item) => {
+                const newStage = stages.find(s => s.id === item.new_stage_id);
+                const oldStage = stages.find(s => s.id === item.old_stage_id);
+                const stageName = newStage?.name ?? 'Estágio removido';
+                const stageColor = newStage?.color ?? '#6B7280';
+                return (
+                  <div key={item.id} className="relative flex items-start gap-3">
+                    <div
+                      className="absolute -left-[11px] w-2 h-2 rounded-full mt-1 shrink-0"
+                      style={{ backgroundColor: stageColor }}
+                    />
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-medium text-text-main">Movido para</p>
+                        <span
+                          className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                          style={{ backgroundColor: stageColor + '22', color: stageColor }}
+                        >
+                          {stageName}
+                        </span>
+                      </div>
+                      {oldStage && (
+                        <div className="flex items-center gap-1 mt-0.5 text-[10px] text-stone-600">
+                          <span>{oldStage.name}</span>
+                          <ArrowRight size={8} />
+                          <span>{stageName}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1.5 mt-1 text-[11px] text-stone-600">
+                        <Clock size={10} />
+                        <span>{formatDate(item.changed_at)}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
 
-              {currentStage && deal.status === 'open' && (
+              {/* Estágio atual (apenas se aberto e sem histórico ou ao final) */}
+              {currentStage && deal.status === 'open' && stageHistory.length === 0 && !loadingHistory && (
                 <div className="relative flex items-start gap-3">
                   <div
                     className="absolute -left-[11px] w-2 h-2 rounded-full mt-1 shrink-0"
@@ -951,6 +1015,7 @@ export const DealDetailPanel: React.FC<DealDetailPanelProps> = ({
                 </div>
               )}
 
+              {/* Fechado: ganho ou perdido */}
               {deal.closed_at && (
                 <div className="relative flex items-start gap-3">
                   <div className={cn(

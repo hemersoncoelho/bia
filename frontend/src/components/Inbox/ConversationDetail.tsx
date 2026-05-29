@@ -29,6 +29,7 @@ import { Composer } from './Composer';
 import { NotesList } from '../Notes/NotesList';
 import { useFollowUpState } from '../../hooks/useFollowUpState';
 import { FollowUpPanel } from '../FollowUp/FollowUpPanel';
+import { dispatchHumanWhatsAppMessage } from '../../services/outboundHumanService';
 import type { Task, TaskStatus, AiAgent, AttendanceMode, Message, Deal, DealStatus } from '../../types';
 
 type LinkedDeal = Pick<Deal, 'id' | 'title' | 'amount' | 'status' | 'loss_reason' | 'closed_at'>;
@@ -554,10 +555,17 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
     conversation?.attendance_mode ?? 'human'
   );
   const [handoffLoading, setHandoffLoading] = useState(false);
+  const [handoffError, setHandoffError] = useState<string | null>(null);
+  // Ref síncrono: evita chamadas duplas ao rpc_set_conversation_attendance
+  // antes que React propague a mudança de handoffLoading via re-render
+  const handoffInFlightRef = useRef(false);
+  const currentModeRef = useRef<AttendanceMode>(conversation?.attendance_mode ?? 'human');
 
-  // Sync mode from conversation prop
+  // Sync mode from conversation prop (e atualiza ref simultaneamente)
   useEffect(() => {
-    setCurrentMode(conversation?.attendance_mode ?? 'human');
+    const mode = conversation?.attendance_mode ?? 'human';
+    setCurrentMode(mode);
+    currentModeRef.current = mode;
   }, [conversation?.attendance_mode]);
 
   // Follow-up state
@@ -990,54 +998,49 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
     }
 
     // Mensagem WhatsApp — n8n cuida do envio via UAZAPI e da persistência no banco
+    const dispatchResult = await dispatchHumanWhatsAppMessage({
+      phone: conversation.contact_phone ?? '',
+      body,
+      company_id: currentCompany!.id,
+      conversation_id: conversation.conversation_id,
+      sender_name: user.full_name,
+      sender_id: user.id,
+    });
+
+    if (!dispatchResult.success) {
+      const errMsg = dispatchResult.error ?? 'Falha ao enviar no WhatsApp.';
+      console.warn('[outbound-human n8n]', errMsg, dispatchResult.response);
+      setSendError(errMsg);
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m)));
+      return;
+    }
+
     try {
-      const res = await fetch(
-        'https://n8n.solucoesai.tech/webhook/sia-one-outbound-human',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone: conversation.contact_phone ?? '',
-            body,
-            company_id: currentCompany!.id,
-            conversation_id: conversation.conversation_id,
-            sender_name: user.full_name,
-            sender_id: user.id,
-          }),
-        }
-      );
-
-      const data = await res.json();
-
-      if (!data.ok) {
-        const errMsg = data.error || 'Falha ao enviar no WhatsApp.';
-        console.warn('[outbound-human n8n]', errMsg);
-        setSendError(errMsg);
-        setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m)));
-        return;
-      }
-
       // Mantém o tempId como está — o Realtime substituirá pelo id real via match body+sender_id.
       // NÃO substituir aqui pelo id numérico do n8n: o Realtime usa public_id (UUID), causando
       // mismatch e duplicação quando os dois chegam com ids diferentes.
       setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: 'sent' } : m)));
 
       // Se a conversa estava no modo IA, pausar e atribuir ao agente humano que enviou
-      if (currentMode !== 'human') {
+      // Usa currentModeRef (síncrono) para evitar closure stale após handleChangeMode
+      if (currentModeRef.current !== 'human' && !handoffInFlightRef.current) {
+        handoffInFlightRef.current = true;
         // 1. Pausar IA — muda attendance_mode para 'human' e registra ai_paused_at
         supabase
           .rpc('rpc_set_conversation_attendance', {
             p_conversation_id: conversation.conversation_id,
             p_mode: 'human',
-            // p_agent_id NÃO é passado: esse parâmetro espera um UUID de ai_agents,
-            // não o id do usuário humano. Omitir usa o DEFAULT NULL da RPC.
           })
           .then(({ data: modeData, error: modeError }) => {
+            handoffInFlightRef.current = false;
             if (modeError) {
               console.warn('[rpc_set_conversation_attendance] erro ao pausar IA:', modeError.message);
-              return; // não bloqueia o envio
+              return;
             }
-            if (modeData?.success) setCurrentMode('human');
+            if (modeData?.success) {
+              setCurrentMode('human');
+              currentModeRef.current = 'human';
+            }
           });
 
         // 2. Atribuir conversa ao agente humano que enviou a mensagem (fire-and-forget)
@@ -1064,51 +1067,44 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
 
       if (onConversationUpdate) onConversationUpdate();
     } catch (err) {
-      console.error('[outbound-human n8n]', err);
-      setSendError('Erro de rede ao enviar mensagem.');
-      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m)));
+      console.error('[post-send conversation update]', err);
     }
   };
 
   // Handoff / mode change
   const handleChangeMode = async (mode: AttendanceMode, agentId?: string) => {
-    if (!conversation || handoffLoading) return;
+    if (!conversation || handoffInFlightRef.current) return;
+    handoffInFlightRef.current = true;
     setHandoffLoading(true);
+    setHandoffError(null);
 
-    const { data } = await supabase.rpc('rpc_set_conversation_attendance', {
-      p_conversation_id: conversation.conversation_id,
-      p_mode: mode,
-      p_agent_id: agentId ?? null,
-    });
+    try {
+      const { data, error } = await supabase.rpc('rpc_set_conversation_attendance', {
+        p_conversation_id: conversation.conversation_id,
+        p_mode: mode,
+        p_agent_id: agentId ?? null,
+      });
 
-    if (data?.success) {
+      if (error) {
+        setHandoffError(error.message);
+        return;
+      }
+
+      if (!data?.success) {
+        setHandoffError(data?.error ?? 'Falha ao alterar modo de atendimento.');
+        return;
+      }
+
       setCurrentMode(mode);
-      // Quando humano assume o atendimento, vincula o deal a ele
+      currentModeRef.current = mode;
       if (mode === 'human' && user && linkedDeal?.id) {
         supabase.from('deals').update({ owner_user_id: user.id }).eq('id', linkedDeal.id);
       }
-      const eventBody =
-        mode === 'ai'
-          ? 'Atendimento transferido para IA.'
-          : mode === 'human'
-          ? 'Atendimento retomado por humano.'
-          : 'Modo híbrido ativado: IA assistindo o atendimento.';
-
-      const sysMsg: Message = {
-        id: `sys-${Date.now()}`,
-        conversation_id: conversation.conversation_id,
-        sender_type: 'system',
-        body: eventBody,
-        message_type: 'text',
-        status: 'sent',
-        is_internal: false,
-        ai_agent_id: agentId,
-        created_at: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, sysMsg]);
       if (onConversationUpdate) onConversationUpdate();
+    } finally {
+      handoffInFlightRef.current = false;
+      setHandoffLoading(false);
     }
-    setHandoffLoading(false);
   };
 
   const handleTransfer = async (userId: string, userName?: string) => {
@@ -1322,6 +1318,16 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
             )}
           </div>
         </div>
+
+        {/* Handoff error banner */}
+        {handoffError && (
+          <div className="shrink-0 flex items-center justify-between gap-2 px-5 py-2 bg-rose-500/10 border-b border-rose-500/20">
+            <span className="text-xs text-rose-400">{handoffError}</span>
+            <button onClick={() => setHandoffError(null)} className="text-rose-500 hover:text-rose-300 shrink-0">
+              <X size={12} />
+            </button>
+          </div>
+        )}
 
         {/* AI active banner */}
         {currentMode === 'ai' && !isClosed && (

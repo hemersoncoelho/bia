@@ -61,3 +61,15 @@ supabase/functions/.cache/
 *.pdf
 
 .mcp.json
+
+.cursor/
+
+.gemini/
+
+.obsidian/
+
+.claude-flow/
+
+roadmap.md
+
+CLAUDE.md

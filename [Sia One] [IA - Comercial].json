@@ -362,7 +362,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Prepara o contexto completo do agent incluindo tools disponíveis\nconst input = $('When Executed by Another Workflow').item.json;\nconst agentConfig = $('prompt_agent').item.json;\n\nconst tools_disponiveis = input.tools_disponiveis ?? '';\nconst tools_json = input.tools_json ?? [];\n\n// Monta bloco de contexto de tools para o prompt\nlet toolsBlock = '';\nif (tools_disponiveis) {\n  toolsBlock += `\\n\\n## TOOLS DISPONÍVEIS NESTE CONTEXTO\\nVocê pode chamar APENAS as seguintes tools: ${tools_disponiveis}\\nNão invente tools que não estejam nessa lista.`;\n}\nif (tools_json && tools_json.length > 0) {\n  toolsBlock += `\\n\\n## DESCRIÇÃO DETALHADA DAS TOOLS\\n`;\n  for (const tool of tools_json) {\n    toolsBlock += `\\n### ${tool.name}\\n`;\n    if (tool.label) toolsBlock += `Label: ${tool.label}\\n`;\n    if (tool.description) toolsBlock += `Descrição: ${tool.description}\\n`;\n    if (tool.when_to_use) toolsBlock += `Quando usar: ${tool.when_to_use}\\n`;\n    if (tool.input_schema) toolsBlock += `Parâmetros esperados: ${JSON.stringify(tool.input_schema)}\\n`;\n  }\n}\n\nreturn [{\n  json: {\n    role: input.role,\n    content: input.content,\n    company_id: input.company_id,\n    contact_id: input.contact_id ?? null,\n    conversation_id: input.conversation_id ?? null,\n    sender_name: input.sender_name ?? '',\n    phone: input.message?.phone ?? '',\n    tools_disponiveis,\n    tools_json,\n    tools_context_block: toolsBlock,\n    agent: agentConfig\n  }\n}];"
+        "jsCode": "// Prepara o contexto completo do agent incluindo tools disponíveis\nconst input = $('When Executed by Another Workflow').item.json;\nconst msg = input.message ?? {};\nconst agentConfig = $('prompt_agent').item.json;\n\nconst tools_disponiveis = input.tools_disponiveis ?? '';\nconst tools_json = input.tools_json ?? [];\n\n// Monta bloco de contexto de tools para o prompt\nlet toolsBlock = '';\nif (tools_disponiveis) {\n  toolsBlock += `\\n\\n## TOOLS DISPONÍVEIS NESTE CONTEXTO\\nVocê pode chamar APENAS as seguintes tools: ${tools_disponiveis}\\nNão invente tools que não estejam nessa lista.`;\n}\nif (tools_json && tools_json.length > 0) {\n  toolsBlock += `\\n\\n## DESCRIÇÃO DETALHADA DAS TOOLS\\n`;\n  for (const tool of tools_json) {\n    toolsBlock += `\\n### ${tool.name}\\n`;\n    if (tool.label) toolsBlock += `Label: ${tool.label}\\n`;\n    if (tool.description) toolsBlock += `Descrição: ${tool.description}\\n`;\n    if (tool.when_to_use) toolsBlock += `Quando usar: ${tool.when_to_use}\\n`;\n    if (tool.input_schema) toolsBlock += `Parâmetros esperados: ${JSON.stringify(tool.input_schema)}\\n`;\n  }\n}\n\n// Resumo de longo prazo da conversa\nconst aiSummary = $('parse_resumo_response')?.first()?.json?.ai_summary ?? null;\nlet resumoBlock = '';\nif (aiSummary) {\n  resumoBlock = `\\n\\n## MEMÓRIA DA CONVERSA (gerada automaticamente)\\n${aiSummary}\\nUse este resumo como contexto de longo prazo. Não mencione que você tem este resumo ao usuário.`;\n}\n\n// Contexto CRM — deal e estágios do pipeline\nconst crmRaw = $('busca_contexto_crm')?.first()?.json ?? {};\nconst crmData = Array.isArray(crmRaw) ? crmRaw[0] : crmRaw;\nconst deal = crmData?.deal ?? null;\nconst stages = crmData?.pipeline_stages ?? [];\nlet crmBlock = '';\nif (deal && deal.id) {\n  const stageNames = stages.map(s => s.name).join(', ');\n  crmBlock = `\\n\\n## DEAL ATUAL NO CRM\\nTítulo: ${deal.title || 'sem título'}\\nEstágio atual: ${deal.current_stage || 'desconhecido'}\\nValor: ${deal.amount ? 'R$ ' + deal.amount : 'não definido'}\\nEstágios disponíveis no pipeline: ${stageNames || 'não disponível'}\\nPara mover o deal use a tool tool_mover_crm com o nome exato de um dos estágios acima, além de company_id e conversation_id do contexto.`;\n}\n\nconst conversationId = input.conversation_id ?? msg.conversation_id ?? null;\nconst companyId = input.company_id ?? msg.company_id ?? null;\n\nreturn [{\n  json: {\n    role: input.role,\n    content: input.content,\n    company_id: companyId,\n    contact_id: input.contact_id ?? msg.contact_id ?? null,\n    conversation_id: conversationId,\n    sender_name: input.sender_name ?? msg.sender_name ?? '',\n    phone: input.phone ?? msg.phone ?? '',\n    tools_disponiveis,\n    tools_json,\n    tools_context_block: toolsBlock + resumoBlock + crmBlock,\n    agent: agentConfig\n  }\n}];"
       },
       "id": "f485502c-8291-46df-b907-fa63556c589a",
       "name": "prepara_contexto_agent",
@@ -437,18 +437,32 @@
     },
     {
       "parameters": {
-        "toolDescription": "Move um deal do CRM para um novo estágio do pipeline. Use quando o usuário avançar no processo de compra ou quando houver mudança de status no funil. Parâmetros: deal_id (uuid), stage_id (uuid do novo estágio).",
-        "method": "PATCH",
-        "url": "=https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/deals?id=eq.{deal_id}",
+        "toolDescription": "Move o deal desta conversa para outro estágio do pipeline CRM. Use quando o cliente avançar no funil de vendas ou houver mudança de status. O agente deve fornecer APENAS o nome do estágio destino (veja ## DEAL ATUAL NO CRM no contexto). Parâmetros: stage_name (nome exato do estágio, ex: 'Proposta', 'Fechamento'), company_id (uuid da empresa), conversation_id (uuid da conversa).",
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_ai_move_deal_stage",
         "sendHeaders": true,
         "parametersHeaders": {
           "values": [
-            {}
+            {
+              "name": "Authorization",
+              "valueProvider": "fieldValue",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBobGd6emp5emtndnZlcWV2cWJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyOTAwMDUsImV4cCI6MjA4ODg2NjAwNX0.aSRZbGFmDrWvjUBnYeiq9SVxiDhaJS-7t7iG4XXUbRI"
+            },
+            {
+              "name": "apikey",
+              "valueProvider": "fieldValue",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBobGd6emp5emtndnZlcWV2cWJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyOTAwMDUsImV4cCI6MjA4ODg2NjAwNX0.aSRZbGFmDrWvjUBnYeiq9SVxiDhaJS-7t7iG4XXUbRI"
+            },
+            {
+              "name": "Content-Type",
+              "valueProvider": "fieldValue",
+              "value": "application/json"
+            }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"stage_id\": \"{stage_id}\",\n  \"updated_at\": \"{{ $now.toISO() }}\"\n}"
+        "jsonBody": "{\"p_company_id\": \"{company_id}\", \"p_conversation_id\": \"{conversation_id}\", \"p_stage_name\": \"{stage_name}\"}"
       },
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
@@ -613,6 +627,192 @@
         5904,
         4144
       ]
+    },
+    {
+      "id": "attn-chk-n8n-01",
+      "name": "check_attendance_mode",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4080,
+        3840
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_n8n_get_conversation_context",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "p_conversation_id",
+              "value": "={{ $('When Executed by Another Workflow').item.json.message.conversation_id }}"
+            }
+          ]
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "attn-prse-n8n-01",
+      "name": "parse_attendance_response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4230,
+        3840
+      ],
+      "parameters": {
+        "jsCode": "const res = $input.first().json;\n// RPC retorna array de rows: [{ attendance_mode, ai_summary }]\nconst row = Array.isArray(res) ? res[0] : res;\nconst trigger = $('When Executed by Another Workflow').item.json;\nconst company_id = trigger.message?.company_id ?? trigger.company_id ?? null;\nreturn [{ json: { attendance_mode: row?.attendance_mode ?? 'ai', company_id } }];"
+      }
+    },
+    {
+      "id": "attn-gate-n8n-01",
+      "name": "gate_attendance",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4380,
+        3840
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-attn-01",
+              "leftValue": "={{ $json.attendance_mode }}",
+              "rightValue": "human",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "attn-noop-n8n-01",
+      "name": "noop_human_mode",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        4380,
+        4000
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "resumo-get-n8n-01",
+      "name": "busca_resumo_conversa",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4770,
+        3840
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_n8n_get_conversation_context",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "p_conversation_id",
+              "value": "={{ $('When Executed by Another Workflow').item.json.message.conversation_id }}"
+            }
+          ]
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "resumo-prse-n8n-01",
+      "name": "parse_resumo_response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4930,
+        3840
+      ],
+      "parameters": {
+        "jsCode": "const res = $input.first().json;\nconst row = Array.isArray(res) ? res[0] : res;\nreturn [{ json: { ai_summary: row?.ai_summary ?? null } }];"
+      }
+    },
+    {
+      "id": "busca-ctx-crm-001",
+      "name": "busca_contexto_crm",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5100,
+        3840
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_ai_get_conversation_crm_context",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "p_company_id",
+              "value": "={{ $('When Executed by Another Workflow').item.json.company_id }}"
+            },
+            {
+              "name": "p_conversation_id",
+              "value": "={{ $('When Executed by Another Workflow').item.json.message?.conversation_id ?? $('When Executed by Another Workflow').item.json.conversation_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
     }
   ],
   "pinData": {
@@ -639,7 +839,7 @@
       "main": [
         [
           {
-            "node": "prompt_agent",
+            "node": "check_attendance_mode",
             "type": "main",
             "index": 0
           }
@@ -789,7 +989,7 @@
       "main": [
         [
           {
-            "node": "prepara_contexto_agent",
+            "node": "busca_resumo_conversa",
             "type": "main",
             "index": 0
           }
@@ -900,6 +1100,79 @@
         [
           {
             "node": "execute_followup_workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_attendance_mode": {
+      "main": [
+        [
+          {
+            "node": "parse_attendance_response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse_attendance_response": {
+      "main": [
+        [
+          {
+            "node": "gate_attendance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "gate_attendance": {
+      "main": [
+        [
+          {
+            "node": "prompt_agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "noop_human_mode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "busca_resumo_conversa": {
+      "main": [
+        [
+          {
+            "node": "parse_resumo_response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse_resumo_response": {
+      "main": [
+        [
+          {
+            "node": "busca_contexto_crm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "busca_contexto_crm": {
+      "main": [
+        [
+          {
+            "node": "prepara_contexto_agent",
             "type": "main",
             "index": 0
           }

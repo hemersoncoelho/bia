@@ -164,18 +164,12 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     }
     if (company) {
-      // Audit log is best-effort — a 400 here (schema cache miss or uuid-ossp
-      // extension not enabled) must not block support mode access.
+      // Audit log is best-effort, but the write path is centralized in an RPC so
+      // the frontend does not depend on the physical audit_logs column layout.
       try {
-        const { error: auditErr } = await supabase.from('audit_logs').insert({
-          actor_user_id: user.id,
-          company_id: company.id,
-          entity_type: 'company',
-          entity_id: company.id,
-          action: 'ENTER_SUPPORT_MODE',
-          after_data: simulateUser
-            ? { impersonated_user_id: simulateUser.id, impersonated_user_name: simulateUser.full_name }
-            : null,
+        const { error: auditErr } = await supabase.rpc('rpc_admin_enter_support_mode', {
+          p_company_id: company.id,
+          p_impersonated_user_id: simulateUser?.id ?? null,
         });
         if (auditErr) console.error('[Tenant] audit_logs insert failed:', auditErr.message, auditErr.code);
       } catch (auditEx) {

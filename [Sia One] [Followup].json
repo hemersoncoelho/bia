@@ -270,14 +270,20 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Content-Type", "value": "application/json" }
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
-      "position": [3568, 1920],
+      "position": [
+        3568,
+        1920
+      ],
       "id": "aa11bb22-cc33-4444-5555-666677778880",
       "name": "check_autopilot_enabled",
       "alwaysOutputData": true,
@@ -315,7 +321,10 @@
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [3808, 1920],
+      "position": [
+        3808,
+        1920
+      ],
       "id": "aa11bb22-cc33-4444-5555-666677778892",
       "name": "route_autopilot"
     },
@@ -323,7 +332,10 @@
       "parameters": {},
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [4048, 1760],
+      "position": [
+        4048,
+        1760
+      ],
       "id": "aa11bb22-cc33-4444-5555-666677778893",
       "name": "noop_autopilot_handles"
     },
@@ -349,7 +361,10 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Content-Type", "value": "application/json" }
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
         "sendBody": true,
@@ -359,10 +374,255 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
-      "position": [4288, 2080],
+      "position": [
+        4288,
+        2080
+      ],
       "id": "bb22cc33-dd44-5566-7788-99aabbccdd00",
       "name": "upsert_agent_operation_rpc",
       "alwaysOutputData": true,
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "id": "parse-sint-fu-01",
+      "name": "parse_sintese_estagio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2256,
+        1840
+      ],
+      "parameters": {
+        "jsCode": "const raw = $input.first().json;\nlet sintese = {};\ntry {\n  const content = raw.choices?.[0]?.message?.content ?? '{}';\n  const cleaned = content.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  sintese = JSON.parse(cleaned);\n} catch(e) {\n  sintese = { estagio: 'prospecção', resumo: '', nivel_engajamento: 'baixo' };\n}\n\nconst trigger = $('When Executed by Another Workflow').item.json;\n\nreturn [{\n  json: {\n    estagio:            sintese.estagio            ?? 'prospecção',\n    resumo:             sintese.resumo             ?? '',\n    nivel_engajamento:  sintese.nivel_engajamento  ?? 'baixo',\n    ultima_acao_ia:     sintese.ultima_acao_ia     ?? '',\n    evento_principal:   sintese.evento_principal   ?? '',\n    company_id:         trigger.company_id,\n    contact_id:         trigger.contact_id,\n    conversation_id:    trigger.conversation_id\n  }\n}];"
+      }
+    },
+    {
+      "id": "salva-res-fu-01",
+      "name": "salva_resumo_conversa",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2496,
+        1720
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_n8n_update_ai_summary",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "p_conversation_id",
+              "value": "={{ $json.conversation_id }}"
+            },
+            {
+              "name": "p_summary",
+              "value": "={{ $json.resumo }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "jFcbndpnIaED8qfx",
+          "name": "Supabase API"
+        }
+      }
+    },
+    {
+      "id": "chk-est-fu-01",
+      "name": "check_estagio_qualificavel",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2496,
+        1840
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-est-01",
+              "leftValue": "={{ $json.estagio }}",
+              "rightValue": "proposta",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "cond-est-02",
+              "leftValue": "={{ $json.estagio }}",
+              "rightValue": "negociação",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "cond-est-03",
+              "leftValue": "={{ $json.estagio }}",
+              "rightValue": "fechamento",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "busca-deal-fu-01",
+      "name": "busca_deal_para_qualificar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2736,
+        1840
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/deals?conversation_id=eq.' + $json.conversation_id + '&status=eq.open&select=id,company_id&limit=1' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "parse-deal-fu-01",
+      "name": "parse_deal_response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2896,
+        1840
+      ],
+      "parameters": {
+        "jsCode": "const res = $input.first().json;\nconst row = Array.isArray(res) ? res[0] : res;\nconst trigger = $('When Executed by Another Workflow').item.json;\nif (!row || !row.id) {\n  return [{ json: { deal_id: null, company_id: trigger.company_id, skip: true } }];\n}\nreturn [{ json: { deal_id: row.id, company_id: row.company_id, skip: false } }];"
+      }
+    },
+    {
+      "id": "marca-qual-fu-01",
+      "name": "marca_lead_qualificado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3056,
+        1840
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_mark_lead_qualified",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_deal_id: $json.deal_id, p_company_id: $json.company_id }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "noop-qual-fu-01",
+      "name": "noop_qualificacao",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2736,
+        2000
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "move-deal-crm-followup-001",
+      "name": "move_deal_crm",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2496,
+        1600
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_ai_move_deal_stage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "p_company_id",
+              "value": "={{ $json.company_id }}"
+            },
+            {
+              "name": "p_conversation_id",
+              "value": "={{ $json.conversation_id }}"
+            },
+            {
+              "name": "p_stage_name",
+              "value": "={{ $json.estagio }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
       "credentials": {
         "httpCustomAuth": {
           "id": "jFcbndpnIaED8qfx",
@@ -411,7 +671,7 @@
       "main": [
         [
           {
-            "node": "prepara_followup_decision1",
+            "node": "parse_sintese_estagio",
             "type": "main",
             "index": 0
           }
@@ -543,6 +803,78 @@
         [
           {
             "node": "upsert_agent_operation_rpc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse_sintese_estagio": {
+      "main": [
+        [
+          {
+            "node": "salva_resumo_conversa",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "check_estagio_qualificavel",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "move_deal_crm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "salva_resumo_conversa": {
+      "main": [
+        [
+          {
+            "node": "prepara_followup_decision1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_estagio_qualificavel": {
+      "main": [
+        [
+          {
+            "node": "busca_deal_para_qualificar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "noop_qualificacao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "busca_deal_para_qualificar": {
+      "main": [
+        [
+          {
+            "node": "parse_deal_response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse_deal_response": {
+      "main": [
+        [
+          {
+            "node": "marca_lead_qualificado",
             "type": "main",
             "index": 0
           }

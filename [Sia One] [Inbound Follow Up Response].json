@@ -13,7 +13,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Valida payload de entrada.\n// Esperado: company_id, contact_id, conversation_id (opcional), message_id (bigint), received_at.\nconst input = $input.first().json;\n\nconst company_id      = input.company_id      || null;\nconst contact_id      = input.contact_id      || null;\nconst conversation_id = input.conversation_id || null;\nconst message_id      = input.message_id      || null;   // bigint da tabela messages\nconst received_at     = input.received_at     || new Date().toISOString();\n\nif (!company_id) {\n  console.log('[follow_up_rpc_error] inbound_response: company_id ausente');\n  return [{ json: { skip: true, reason: 'no_company_id' } }];\n}\nif (!contact_id) {\n  console.log('[follow_up_rpc_error] inbound_response: contact_id ausente');\n  return [{ json: { skip: true, reason: 'no_contact_id' } }];\n}\n\nconsole.log('[follow_up_check_started] inbound_response' +\n  ' company_id='    + company_id +\n  ' contact_id='    + contact_id +\n  ' conversation_id=' + conversation_id +\n  ' message_id='    + message_id);\n\nreturn [{\n  json: {\n    company_id,\n    contact_id,\n    conversation_id,\n    message_id,\n    received_at,\n    skip: false\n  }\n}];\n"
+        "jsCode": "// Valida payload de entrada.\n// Esperado: company_id, contact_id, conversation_id (opcional), message_id (ID externo do WhatsApp, text), received_at.\nconst input = $input.first().json;\n\nconst company_id           = input.company_id      || null;\nconst contact_id           = input.contact_id      || null;\nconst conversation_id      = input.conversation_id || null;\nconst external_message_id  = input.message_id      || null;  // ID externo WhatsApp (string hex)\nconst received_at          = input.received_at     || new Date().toISOString();\n\nif (!company_id) {\n  console.log('[follow_up_rpc_error] inbound_response: company_id ausente');\n  return [{ json: { skip: true, reason: 'no_company_id' } }];\n}\nif (!contact_id) {\n  console.log('[follow_up_rpc_error] inbound_response: contact_id ausente');\n  return [{ json: { skip: true, reason: 'no_contact_id' } }];\n}\n\nconsole.log('[follow_up_check_started] inbound_response' +\n  ' company_id='         + company_id +\n  ' contact_id='         + contact_id +\n  ' conversation_id='    + conversation_id +\n  ' external_message_id=' + external_message_id);\n\nreturn [{\n  json: {\n    company_id,\n    contact_id,\n    conversation_id,\n    external_message_id,\n    received_at,\n    skip: false\n  }\n}];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -66,7 +66,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  p_company_id:          $json.company_id,\n  p_contact_id:          $json.contact_id,\n  p_conversation_id:     $json.conversation_id || null,\n  p_response_message_id: $json.message_id      || null,\n  p_received_at:         $json.received_at\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  p_company_id:           $json.company_id,\n  p_contact_id:           $json.contact_id,\n  p_conversation_id:      $json.conversation_id      || null,\n  p_external_message_id:  $json.external_message_id  || null,\n  p_received_at:          $json.received_at\n}) }}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",

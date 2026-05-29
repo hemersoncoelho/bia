@@ -1,0 +1,429 @@
+{
+  "name": "[Sia One] [Outbound - Human]",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.body && typeof $input.first().json.body === 'object'\n  ? $input.first().json.body\n  : $input.first().json;\n\nreturn [{ json: {\n  phone: String(raw.phone ?? ''),\n  body: String(raw.body ?? ''),\n  company_id: raw.company_id,\n  conversation_id: raw.conversation_id ?? null,\n  sender_name: raw.sender_name ?? 'Agente',\n  sender_id: raw.sender_id ?? null\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        496
+      ],
+      "id": "73e629c4-d508-4cd6-9298-4a29e7f0690b",
+      "name": "Normalizar"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: $json.error ?? 'Integração UAZAPI não encontrada.' }) }}",
+        "options": {
+          "responseCode": 422
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1088,
+        512
+      ],
+      "id": "679a4c3d-670c-4305-a789-5dddac4ce7da",
+      "name": "Erro Integração"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sia-one-outbound-human",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -48,
+        496
+      ],
+      "id": "544f6360-6369-4fd1-848a-70e3e9452c21",
+      "name": "Webhook1",
+      "webhookId": "sia-one-outbound-human"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_get_company_integration",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBobGd6emp5emtndnZlcWV2cWJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyOTAwMDUsImV4cCI6MjA4ODg2NjAwNX0.aSRZbGFmDrWvjUBnYeiq9SVxiDhaJS-7t7iG4XXUbRI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBobGd6emp5emtndnZlcWV2cWJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyOTAwMDUsImV4cCI6MjA4ODg2NjAwNX0.aSRZbGFmDrWvjUBnYeiq9SVxiDhaJS-7t7iG4XXUbRI"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_company_id: $json.company_id }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        400,
+        496
+      ],
+      "id": "56ab313a-a93f-49e6-a345-1e491a389eec",
+      "name": "Buscar Integração1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b0cond-success-001",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        624,
+        496
+      ],
+      "id": "090fbde2-e141-43d7-b593-85672d4a3f7a",
+      "name": "Validar Integração1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const norm = $('Normalizar').first().json;\nconst uazapi = $input.first().json;\n\nreturn [{ json: {\n  p_company_id:           norm.company_id,\n  p_phone:                norm.phone,\n  p_body:                 norm.body,\n  p_sender_name:          norm.sender_name,\n  p_conversation_id:      norm.conversation_id,\n  p_external_message_id:  uazapi?.id || uazapi?.key?.id || uazapi?.messageId || null,\n  p_sender_id:            norm.sender_id\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        224
+      ],
+      "id": "ec0affc7-d248-4956-a7bf-dd69f2bf1c78",
+      "name": "Preparar Persistência1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/rpc/rpc_save_human_message",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBobGd6emp5emtndnZlcWV2cWJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyOTAwMDUsImV4cCI6MjA4ODg2NjAwNX0.aSRZbGFmDrWvjUBnYeiq9SVxiDhaJS-7t7iG4XXUbRI"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBobGd6emp5emtndnZlcWV2cWJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyOTAwMDUsImV4cCI6MjA4ODg2NjAwNX0.aSRZbGFmDrWvjUBnYeiq9SVxiDhaJS-7t7iG4XXUbRI"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1312,
+        224
+      ],
+      "id": "ac39d9cb-3cf5-4942-a6fe-10d646fdaa09",
+      "name": "Salvar no Banco1",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: $json.success === true, message_id: $json.message_id ?? null }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1536,
+        224
+      ],
+      "id": "f1a301e9-05c5-4c83-b6ec-0a7064876a18",
+      "name": "Responder ao Frontend1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://simplifique.uazapi.com/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "token",
+              "value": "={{ $('Buscar Integração1').first().json.instance_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Webhook1').item.json.body.phone }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $('Normalizar').first().json.body }}"
+            },
+            {
+              "name": "delay",
+              "value": "1500"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        864,
+        368
+      ],
+      "id": "65caa979-7d59-426a-a7f3-3a928a1a8ab5",
+      "name": "Enviar Mensagem",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://simplifique.uazapi.com/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "token",
+              "value": "={{ $('Buscar Integração1').first().json.instance_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "number",
+              "value": "={{ $('Normalizar').first().json.phone }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $('Normalizar').first().json.body }}"
+            },
+            {
+              "name": "delay",
+              "value": "1500"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1376,
+        736
+      ],
+      "id": "24d40f88-76b6-4a35-93ce-780760663893",
+      "name": "Enviar Mensagem1"
+    }
+  ],
+  "pinData": {
+    "Webhook1": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.solucoesai.tech",
+            "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+            "content-length": "233",
+            "accept": "*/*",
+            "accept-encoding": "gzip, deflate, br, zstd",
+            "accept-language": "pt-PT,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+            "content-type": "application/json",
+            "origin": "https://siaone.vercel.app",
+            "priority": "u=1, i",
+            "referer": "https://siaone.vercel.app/",
+            "sec-ch-ua": "\"Chromium\";v=\"146\", \"Not-A.Brand\";v=\"24\", \"Google Chrome\";v=\"146\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Linux\"",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "x-forwarded-for": "191.5.212.144",
+            "x-forwarded-host": "n8n.solucoesai.tech",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "2fbe478a82a0",
+            "x-real-ip": "191.5.212.144"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "phone": "558898325848",
+            "body": "Boa noite",
+            "company_id": "df3aaff7-08f8-4b69-ac47-eaa932f3f7c4",
+            "conversation_id": "b1fec7d4-87e5-493b-a7dc-b691a69593e1",
+            "sender_name": "Renan Meneses",
+            "sender_id": "8208897b-a03a-415f-824d-fc8e1c21d441"
+          },
+          "webhookUrl": "https://webhook.solucoesai.tech/webhook/sia-one-outbound-human",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Normalizar": {
+      "main": [
+        [
+          {
+            "node": "Buscar Integração1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Normalizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Integração1": {
+      "main": [
+        [
+          {
+            "node": "Validar Integração1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Integração1": {
+      "main": [
+        [
+          {
+            "node": "Enviar Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Erro Integração",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Persistência1": {
+      "main": [
+        [
+          {
+            "node": "Salvar no Banco1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salvar no Banco1": {
+      "main": [
+        [
+          {
+            "node": "Responder ao Frontend1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Preparar Persistência1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Erro Integração",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "68f3f82b-d947-41de-8f27-907899d461b0",
+  "meta": {
+    "instanceId": "7e44dba8003e8ae6a7e9a2d983d63ce1a03b6fc6d0baad5c615d2e5c3f6e4030"
+  },
+  "id": "8ALpHkammW9t3vsE0fSQz",
+  "tags": []
+}

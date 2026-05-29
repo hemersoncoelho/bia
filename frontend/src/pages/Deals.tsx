@@ -209,7 +209,7 @@ export const Deals: React.FC = () => {
     try {
       const { error: rpcErr } = await supabase.rpc('rpc_update_deal_stage', {
         p_deal_id: dealId,
-        p_stage_id: newStageId,
+        p_new_stage_id: newStageId,
       });
 
       if (rpcErr) throw rpcErr;

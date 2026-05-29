@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTenant } from '../../contexts/TenantContext';
 import { X, Send, Plus, Loader2 } from 'lucide-react';
+import { dispatchHumanWhatsAppMessage } from '../../services/outboundHumanService';
 
 interface NewConversationModalProps {
   isOpen: boolean;
@@ -63,23 +64,24 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({ isOp
           return;
        }
 
-       // Despachar mensagem via UAZAPI quando canal for WhatsApp
+       // Despachar mensagem inicial via n8n. A RPC acima já deixou a mensagem
+       // queued no banco; o n8n só precisa enviar e confirmar/atualizar.
        if (channel === 'whatsapp' && data.message_id != null) {
           const msgId = typeof data.message_id === 'string' ? Number(data.message_id) : data.message_id;
-          const { data: { session } } = await supabase.auth.getSession();
-          const { error: fnError, data: fnData } = await supabase.functions.invoke<{ success: boolean; error?: string }>('send-whatsapp-message', {
-             body: {
-                conversation_id: data.conversation_id,
-                message_id: msgId,
-                body: message,
-             },
-             headers: session?.access_token
-               ? { Authorization: `Bearer ${session.access_token}` }
-               : undefined,
+          const dispatchResult = await dispatchHumanWhatsAppMessage({
+             phone: identity,
+             body: message,
+             company_id: currentCompany.id,
+             conversation_id: data.conversation_id,
+             sender_name: user.full_name,
+             sender_id: user.id,
+             message_id: msgId,
+             existing_message_id: msgId,
+             should_persist_message: false,
           });
-          if (fnError || !fnData?.success) {
-             const err = fnData?.error || fnError?.message || 'Falha ao enviar no WhatsApp.';
-             console.warn('[send-whatsapp-message]', err);
+          if (!dispatchResult.success) {
+             const err = dispatchResult.error || 'Falha ao enviar no WhatsApp.';
+             console.warn('[outbound-human n8n]', err, dispatchResult.response);
              setContactName('');
              setIdentity('');
              setMessage('');

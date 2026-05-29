@@ -211,7 +211,7 @@
           "conditions": [
             {
               "id": "f3a4b5c6-d7e8-9012-fab3-456789012323",
-              "leftValue": "={{ $json.key != null }}",
+              "leftValue": "={{ !!($json.key ?? $json.id ?? $json.messageId ?? $json.message_id) && !$json.error && !$json.errors }}",
               "rightValue": "",
               "operator": {
                 "type": "boolean",
@@ -263,7 +263,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ 'https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/agent_operations?company_id=eq.' + $('prepare_send').item.json.company_id + '&conversation_id=eq.' + $('prepare_send').item.json.conversation_id + '&status=in.(queued,paused)&order=created_at.desc&limit=1&select=id,status' }}",
+        "url": "={{ 'https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/agent_operations?company_id=eq.' + $('prepare_send').item.json.company_id + '&contact_id=eq.' + $('prepare_send').item.json.contact_id + '&status=in.(queued,paused,sending)&order=send_at.asc&limit=1&select=id,status' }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpCustomAuth",
         "sendHeaders": true,
@@ -289,7 +289,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Monta payload final para rpc_register_follow_up_sent.\nconst ctx      = $('prepare_send').item.json;\nconst uaResp   = $('send_whatsapp').item.json;\nconst saveResp = $('save_ai_message').item.json;\nconst opsArr   = $input.item.json;\n\nconst external_message_id = uaResp && uaResp.key ? String(uaResp.key) : null;\nconst message_id = saveResp && saveResp.message_id ? saveResp.message_id : null;\n\nconst ops = Array.isArray(opsArr) ? opsArr : [];\nconst operation_id = ops.length > 0 ? ops[0].id : null;\n\nreturn [{\n  json: {\n    company_id:           ctx.company_id,\n    contact_id:           ctx.contact_id,\n    conversation_id:      ctx.conversation_id,\n    trigger_id:           ctx.trigger_id,\n    operation_id,\n    message_id,\n    external_message_id,\n    idempotency_key:      ctx.idempotency_key,\n    cycle_id:             ctx.cycle_id,\n    register_payload: {\n      p_company_id:          ctx.company_id,\n      p_contact_id:          ctx.contact_id,\n      p_conversation_id:     ctx.conversation_id     || null,\n      p_deal_id:             null,\n      p_task_id:             null,\n      p_operation_id:        operation_id             || null,\n      p_trigger_id:          ctx.trigger_id           || null,\n      p_cadence_id:          null,\n      p_cadence_step_id:     null,\n      p_follow_type:         'agent_auto',\n      p_channel:             'whatsapp',\n      p_message_id:          message_id               || null,\n      p_external_message_id: external_message_id      || null,\n      p_idempotency_key:     ctx.idempotency_key      || null,\n      p_metadata: {\n        workflow_name:  '[Sia One] [Process Due Followup Triggers]',\n        trigger_type:   ctx.trigger_type,\n        attempt_number: ctx.attempt_number\n      }\n    }\n  }\n}];\n"
+        "jsCode": "// Monta payload final para rpc_register_follow_up_sent.\nconst ctx      = $('prepare_send').item.json;\nconst uaResp   = $('send_whatsapp').item.json;\nconst saveResp = $('save_ai_message').item.json;\nconst opsArr   = $input.item.json;\n\nconst rawKey = uaResp && (uaResp.key ?? uaResp.id ?? uaResp.messageId ?? uaResp.message_id);\nconst external_message_id = rawKey ? String(typeof rawKey === 'object' ? (rawKey.id ?? JSON.stringify(rawKey)) : rawKey) : null;\nconst message_id = saveResp && saveResp.message_id ? saveResp.message_id : null;\n\nconst ops = Array.isArray(opsArr) ? opsArr : [];\nconst operation_id = ops.length > 0 ? ops[0].id : null;\n\nreturn [{\n  json: {\n    company_id:           ctx.company_id,\n    contact_id:           ctx.contact_id,\n    conversation_id:      ctx.conversation_id,\n    trigger_id:           ctx.trigger_id,\n    operation_id,\n    message_id,\n    external_message_id,\n    idempotency_key:      ctx.idempotency_key,\n    cycle_id:             ctx.cycle_id,\n    register_payload: {\n      p_company_id:          ctx.company_id,\n      p_contact_id:          ctx.contact_id,\n      p_conversation_id:     ctx.conversation_id     || null,\n      p_deal_id:             null,\n      p_task_id:             null,\n      p_operation_id:        operation_id             || null,\n      p_trigger_id:          ctx.trigger_id           || null,\n      p_cadence_id:          null,\n      p_cadence_step_id:     null,\n      p_follow_type:         'agent_auto',\n      p_channel:             'whatsapp',\n      p_message_id:          message_id               || null,\n      p_external_message_id: external_message_id      || null,\n      p_idempotency_key:     ctx.idempotency_key      || null,\n      p_metadata: {\n        workflow_name:  '[Sia One] [Process Due Followup Triggers]',\n        trigger_type:   ctx.trigger_type,\n        attempt_number: ctx.attempt_number\n      }\n    }\n  }\n}];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -340,7 +340,7 @@
     {
       "parameters": {
         "method": "PATCH",
-        "url": "={{ 'https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/agent_operations?id=eq.' + $json.operation_id + '&company_id=eq.' + $json.company_id }}",
+        "url": "={{ 'https://phlgzzjyzkgvveqevqbg.supabase.co/rest/v1/agent_operations?id=eq.' + ($json.operation_id || '00000000-0000-0000-0000-000000000000') + '&company_id=eq.' + $json.company_id }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpCustomAuth",
         "sendHeaders": true,

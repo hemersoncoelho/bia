@@ -97,7 +97,6 @@ export const StatsStrip: React.FC<Props> = ({ data }) => (
       label="Conclusão hoje"
       value={data.completedToday}
       suffix="%"
-      delta={8}
       delay={0}
     />
     <div className="w-px self-stretch bg-border" />
@@ -105,7 +104,6 @@ export const StatsStrip: React.FC<Props> = ({ data }) => (
       label="Tempo médio"
       value={data.avgMinutes}
       suffix=" min"
-      delta={-3}
       valueColor="#fbbf24"
       delay={50}
     />

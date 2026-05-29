@@ -645,7 +645,7 @@ export const Dashboard: React.FC = () => {
         let convQ = supabase.from('conversations').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).eq('status', 'open').eq('assigned_to', effectiveUserId).gte('created_at', since);
         let msgQ  = supabase.from('messages').select('id, conversations!inner(company_id, assigned_to)', { count: 'exact', head: true }).eq('conversations.company_id', currentCompany.id).eq('conversations.assigned_to', effectiveUserId).gte('created_at', since);
         let ledQ  = supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).eq('owner_user_id', effectiveUserId).gte('created_at', since);
-        let qualQ = supabase.from('deals').select('contact_id').eq('company_id', currentCompany.id).eq('status', 'open').eq('owner_user_id', effectiveUserId).not('contact_id', 'is', null).gte('created_at', since);
+        let qualQ = supabase.from('deals').select('contact_id').eq('company_id', currentCompany.id).eq('is_qualified', true).eq('owner_user_id', effectiveUserId).not('contact_id', 'is', null).gte('created_at', since);
         if (until) { convQ = convQ.lte('created_at', until); msgQ = msgQ.lte('created_at', until); ledQ = ledQ.lte('created_at', until); qualQ = qualQ.lte('created_at', until); }
         let apptQ = supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).eq('status', 'completed').gte('scheduled_at', since);
         if (until) apptQ = apptQ.lte('scheduled_at', until);
@@ -664,7 +664,7 @@ export const Dashboard: React.FC = () => {
         let convQ = supabase.from('conversations').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).eq('status', 'open').gte('created_at', since);
         let msgQ  = supabase.from('messages').select('id, conversations!inner(company_id)', { count: 'exact', head: true }).eq('conversations.company_id', currentCompany.id).gte('created_at', since);
         let ledQ  = supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).gte('created_at', since);
-        let qualQ = supabase.from('deals').select('contact_id').eq('company_id', currentCompany.id).eq('status', 'open').not('contact_id', 'is', null).gte('created_at', since);
+        let qualQ = supabase.from('deals').select('contact_id').eq('company_id', currentCompany.id).eq('is_qualified', true).not('contact_id', 'is', null).gte('created_at', since);
         if (until) { convQ = convQ.lte('created_at', until); msgQ = msgQ.lte('created_at', until); ledQ = ledQ.lte('created_at', until); qualQ = qualQ.lte('created_at', until); }
         let apptQ2 = supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('company_id', currentCompany.id).eq('status', 'completed').gte('scheduled_at', since);
         if (until) apptQ2 = apptQ2.lte('scheduled_at', until);
